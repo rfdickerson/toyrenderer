@@ -1,50 +1,102 @@
 #include <stdio.h>
 
-#include <memory>
-#include <iostream>
-#include <fstream>
-#include <string>
+//#include <memory>
+//#include <iostream>
+//#include <fstream>
+//#include <string>
+//#include <array>
+//#include <chrono>
 
-#include <vulkan/vulkan_core.h>
-#include <GLFW/glfw3.h>
+//#include <vulkan/vulkan_core.h>
+//#define GLFW_INCLUDE_VULKAN
+//#include <GLFW/glfw3.h>
 
-#include <VkBootstrap.h>
+//#include <VkBootstrap.h>
+//#include "vk_mem_alloc.h"
 
-//#include "example_config.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include "common.hpp"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-struct Init {
-    GLFWwindow* window;
-    vkb::Instance instance;
-    vkb::InstanceDispatchTable inst_disp;
-    VkSurfaceKHR surface;
-    vkb::Device device;
-    vkb::DispatchTable disp;
-    vkb::Swapchain swapchain;
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 color;
+
+    static VkVertexInputBindingDescription getBindingDescription() {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+        return attributeDescriptions;
+    }
 };
 
-struct RenderData {
-    VkQueue graphics_queue;
-    VkQueue present_queue;
-
-    std::vector<VkImage> swapchain_images;
-    std::vector<VkImageView> swapchain_image_views;
-    std::vector<VkFramebuffer> framebuffers;
-
-    VkRenderPass render_pass;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline graphics_pipeline;
-
-    VkCommandPool command_pool;
-    std::vector<VkCommandBuffer> command_buffers;
-
-    std::vector<VkSemaphore> available_semaphores;
-    std::vector<VkSemaphore> finished_semaphore;
-    std::vector<VkFence> in_flight_fences;
-    std::vector<VkFence> image_in_flight;
-    size_t current_frame = 0;
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
 };
+
+
+
+
+
+const std::vector<Vertex> vertices = {
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
+        {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+        {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 1.0f}},
+        {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}},
+        {{0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 0.0f}},
+        {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+        0, 1, 2, 2, 3, 0,
+        4, 5, 6, 6, 7, 4,
+        0, 4, 7, 7, 3, 0,
+        1, 5, 6, 6, 2, 1,
+        3, 2, 6, 6, 7, 3,
+        0, 1, 5, 5, 4, 0
+};
+
+void create_buffer(Init& init, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, BufferAllocation& bufferAllocation) {
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = memoryUsage;
+
+    if (vmaCreateBuffer(init.allocator, &bufferInfo, &allocInfo,
+                        &bufferAllocation.buffer,
+                        &bufferAllocation.allocation,
+                        nullptr) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create buffer!");
+    }
+}
 
 GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true) {
     glfwInit();
@@ -61,6 +113,7 @@ void destroy_window_glfw(GLFWwindow* window) {
 
 VkSurfaceKHR create_surface_glfw(VkInstance instance, GLFWwindow* window, VkAllocationCallbacks* allocator = nullptr) {
     VkSurfaceKHR surface = VK_NULL_HANDLE;
+
     VkResult err = glfwCreateWindowSurface(instance, window, allocator, &surface);
     if (err) {
         const char* error_msg;
@@ -79,14 +132,12 @@ int device_initialization(Init& init) {
     init.window = create_window_glfw("Vulkan Triangle", true);
 
     vkb::InstanceBuilder instance_builder;
-    //auto instance_ret = instance_builder.use_default_debug_messenger().request_validation_layers().build();
 
     auto instance_ret = instance_builder
             .set_app_name("Vulkan Triangle")
             .set_engine_name("AwesomeEngine")
             .request_validation_layers()
             .use_default_debug_messenger()
-            .require_api_version(1, 1, 0)
             .build();
 
     if (!instance_ret) {
@@ -106,6 +157,7 @@ int device_initialization(Init& init) {
         return -1;
     }
     vkb::PhysicalDevice physical_device = phys_device_ret.value();
+    init.physical_device = physical_device;
 
     vkb::DeviceBuilder device_builder{ physical_device };
     auto device_ret = device_builder.build();
@@ -116,6 +168,27 @@ int device_initialization(Init& init) {
     init.device = device_ret.value();
 
     init.disp = init.device.make_table();
+
+    VkCommandPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.queueFamilyIndex = init.device.get_queue_index(vkb::QueueType::graphics).value();
+    pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+    if (init.disp.createCommandPool(&pool_info, nullptr, &init.command_pool) != VK_SUCCESS) {
+        std::cout << "failed to create command pool\n";
+        return -1;
+    }
+
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.physicalDevice = physical_device.physical_device;
+    allocatorInfo.device = init.device.device;
+    allocatorInfo.instance = init.instance.instance;
+
+    if (vmaCreateAllocator(&allocatorInfo, &init.allocator) != VK_SUCCESS) {
+        std::cout << "failed to create VMA allocator\n";
+        return -1;
+    }
+
 
     return 0;
 }
@@ -581,6 +654,12 @@ void cleanup(Init& init, RenderData& data) {
     init.swapchain.destroy_image_views(data.swapchain_image_views);
 
     vkb::destroy_swapchain(init.swapchain);
+
+    vmaDestroyBuffer(init.allocator, data.vertex_buffer.buffer, data.vertex_buffer.allocation);
+    vmaDestroyAllocator(init.allocator);
+
+    init.disp.destroyCommandPool(init.command_pool, nullptr);
+
     vkb::destroy_device(init.device);
     vkb::destroy_surface(init.instance, init.surface);
     vkb::destroy_instance(init.instance);
@@ -600,6 +679,15 @@ int main() {
     if (0 != create_command_pool(init, render_data)) return -1;
     if (0 != create_command_buffers(init, render_data)) return -1;
     if (0 != create_sync_objects(init, render_data)) return -1;
+
+    create_buffer(init,
+                  sizeof(vertices[0]) * vertices.size(),
+                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                  VMA_MEMORY_USAGE_CPU_TO_GPU,
+                  render_data.vertex_buffer);
+
+
+
 
     while (!glfwWindowShouldClose(init.window)) {
         glfwPollEvents();
