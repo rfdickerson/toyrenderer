@@ -5,9 +5,6 @@
 #ifndef TOYRENDERER_COMMON_HPP
 #define TOYRENDERER_COMMON_HPP
 
-//#include <GLFW/glfw3.h>
-//#include <VkBootstrap.h>
-//#include <vk_mem_alloc.h>
 
 struct Init {
     GLFWwindow* window;
@@ -42,6 +39,7 @@ struct RenderData {
     VkPipeline graphics_pipeline;
 
     VkCommandPool command_pool;
+
     std::vector<VkCommandBuffer> command_buffers;
 
     std::vector<VkSemaphore> available_semaphores;
@@ -58,6 +56,41 @@ struct RenderData {
     VkDescriptorSetLayout descriptor_set_layout;
     VkDescriptorSet descriptor_set;
 
+};
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 color;
+
+    static VkVertexInputBindingDescription getBindingDescription() {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding = 0;
+        bindingDescription.stride = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+        attributeDescriptions[0].binding = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+        return attributeDescriptions;
+    }
+};
+
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
 };
 
 #endif //TOYRENDERER_COMMON_HPP
