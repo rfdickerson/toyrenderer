@@ -24,6 +24,7 @@ struct Init {
 struct BufferAllocation {
     VkBuffer buffer;
     VmaAllocation allocation;
+    VkDeviceSize size;
 };
 
 struct RenderData {

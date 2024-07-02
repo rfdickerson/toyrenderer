@@ -23,23 +23,7 @@ const std::vector<uint16_t> indices = {
         0, 1, 5, 5, 4, 0
 };
 
-void create_buffer(Init& init, VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, BufferAllocation& bufferAllocation) {
-    VkBufferCreateInfo bufferInfo = {};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = memoryUsage;
-
-    if (vmaCreateBuffer(init.allocator, &bufferInfo, &allocInfo,
-                        &bufferAllocation.buffer,
-                        &bufferAllocation.allocation,
-                        nullptr) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create buffer!");
-    }
-}
 
 GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true) {
     glfwInit();
@@ -598,7 +582,6 @@ void cleanup(Init& init, RenderData& data) {
 
     vkb::destroy_swapchain(init.swapchain);
 
-    vmaDestroyBuffer(init.allocator, data.vertex_buffer.buffer, data.vertex_buffer.allocation);
     vmaDestroyAllocator(init.allocator);
 
     init.disp.destroyCommandPool(init.command_pool, nullptr);
@@ -630,8 +613,6 @@ int main() {
                   render_data.vertex_buffer);
 
 
-
-
     while (!glfwWindowShouldClose(init.window)) {
         glfwPollEvents();
         int res = draw_frame(init, render_data);
@@ -641,6 +622,8 @@ int main() {
         }
     }
     init.disp.deviceWaitIdle();
+
+    cleanup_buffer(init, render_data.vertex_buffer);
 
     cleanup(init, render_data);
     return 0;
