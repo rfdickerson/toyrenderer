@@ -12,6 +12,26 @@ find_package(Vulkan REQUIRED)
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
+# Find glslc shader compiler
+find_program(GLSLC glslc HINTS Vulkan::glslc)
+
+# Function to compile shaders
+function(compile_shader TARGET SHADER)
+    get_filename_component(SHADER_NAME ${SHADER} NAME)
+    set(SPIRV "${CMAKE_CURRENT_BINARY_DIR}/shaders/${SHADER_NAME}.spv")
+    add_custom_command(
+            OUTPUT ${SPIRV}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/shaders/"
+            COMMAND ${GLSLC} -o ${SPIRV} ${SHADER}
+            DEPENDS ${SHADER}
+            COMMENT "Compiling ${SHADER_NAME}"
+    )
+    target_sources(${TARGET} PRIVATE ${SPIRV})
+endfunction()
+
+# Set the source directory
+set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
 # Collect all the source files
 file(GLOB_RECURSE SRC_FILES
         "${SRC_DIR}/*.cpp"
@@ -19,6 +39,22 @@ file(GLOB_RECURSE SRC_FILES
 )
 
 add_executable(toyrenderer ${SRC_FILES})
+
+# Compile shaders
+file(GLOB_RECURSE SHADERS
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.vert"
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.frag"
+)
+foreach(SHADER ${SHADERS})
+    compile_shader(toyrenderer ${SHADER})
+endforeach()
+
+# Copy compiled shaders to the build directory
+add_custom_command(TARGET toyrenderer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+        "$<TARGET_FILE_DIR:toyrenderer>/shaders"
+)
 
 target_include_directories(toyrenderer PRIVATE ${SRC_DIR})
 
