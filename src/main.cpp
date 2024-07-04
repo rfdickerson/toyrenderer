@@ -1,6 +1,10 @@
 #include "common.hpp"
 #include "utils.hpp"
 
+#include "../extern/imgui/imgui.h"
+#include "../extern/imgui/imgui_impl_glfw.h"
+#include "../extern/imgui/imgui_impl_vulkan.h"
+
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<Vertex> vertices = {
@@ -30,7 +34,7 @@ GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     if (!resize) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    return glfwCreateWindow(1024, 1024, window_name, NULL, NULL);
+    return glfwCreateWindow(1024, 1024, window_name, nullptr, nullptr);
 }
 
 void destroy_window_glfw(GLFWwindow* window) {
@@ -383,6 +387,7 @@ int create_command_pool(Init& init, RenderData& data) {
     VkCommandPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     pool_info.queueFamilyIndex = init.device.get_queue_index(vkb::QueueType::graphics).value();
+    pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     if (init.disp.createCommandPool(&pool_info, nullptr, &data.command_pool) != VK_SUCCESS) {
         std::cout << "failed to create command pool\n";
@@ -392,64 +397,77 @@ int create_command_pool(Init& init, RenderData& data) {
 }
 
 int create_command_buffers(Init& init, RenderData& data) {
-    data.command_buffers.resize(data.framebuffers.size());
+    data.command_buffers.resize(init.swapchain.image_count);
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = data.command_pool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = (uint32_t)data.command_buffers.size();
+    allocInfo.commandBufferCount = (uint32_t)data.command_buffers.size(); // We only need one command buffer now
 
     if (init.disp.allocateCommandBuffers(&allocInfo, data.command_buffers.data()) != VK_SUCCESS) {
-        return -1; // failed to allocate command buffers;
+        std::cout << "failed to allocate command buffers\n";
+        return -1;
+    }
+    return 0;
+}
+
+int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
+
+    init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0; // Optional
+    beginInfo.pInheritanceInfo = nullptr; // Optional
+
+    if (init.disp.beginCommandBuffer(data.command_buffers[imageIndex], &beginInfo) != VK_SUCCESS) {
+        std::cout << "failed to begin recording command buffer\n";
+        return -1;
     }
 
-    for (size_t i = 0; i < data.command_buffers.size(); i++) {
-        VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    VkRenderPassBeginInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = data.render_pass;
+    renderPassInfo.framebuffer = data.framebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = init.swapchain.extent;
 
-        if (init.disp.beginCommandBuffer(data.command_buffers[i], &begin_info) != VK_SUCCESS) {
-            return -1; // failed to begin recording command buffer
-        }
+    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    renderPassInfo.clearValueCount = 1;
+    renderPassInfo.pClearValues = &clearColor;
 
-        VkRenderPassBeginInfo render_pass_info = {};
-        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        render_pass_info.renderPass = data.render_pass;
-        render_pass_info.framebuffer = data.framebuffers[i];
-        render_pass_info.renderArea.offset = { 0, 0 };
-        render_pass_info.renderArea.extent = init.swapchain.extent;
-        VkClearValue clearColor{ { { 0.0f, 0.0f, 0.0f, 1.0f } } };
-        render_pass_info.clearValueCount = 1;
-        render_pass_info.pClearValues = &clearColor;
+    init.disp.cmdBeginRenderPass(data.command_buffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float)init.swapchain.extent.width;
-        viewport.height = (float)init.swapchain.extent.height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
+    init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 
-        VkRect2D scissor = {};
-        scissor.offset = { 0, 0 };
-        scissor.extent = init.swapchain.extent;
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(init.swapchain.extent.width);
+    viewport.height = static_cast<float>(init.swapchain.extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    init.disp.cmdSetViewport(data.command_buffers[imageIndex], 0, 1, &viewport);
 
-        init.disp.cmdSetViewport(data.command_buffers[i], 0, 1, &viewport);
-        init.disp.cmdSetScissor(data.command_buffers[i], 0, 1, &scissor);
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = init.swapchain.extent;
+    init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
 
-        init.disp.cmdBeginRenderPass(data.command_buffers[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+    init.disp.cmdDraw(data.command_buffers[imageIndex], 3, 1, 0, 0);
 
-        init.disp.cmdBindPipeline(data.command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+    // Render ImGui
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
 
-        init.disp.cmdDraw(data.command_buffers[i], 3, 1, 0, 0);
+    init.disp.cmdEndRenderPass(data.command_buffers[imageIndex]);
 
-        init.disp.cmdEndRenderPass(data.command_buffers[i]);
-
-        if (init.disp.endCommandBuffer(data.command_buffers[i]) != VK_SUCCESS) {
-            std::cout << "failed to record command buffer\n";
-            return -1; // failed to record command buffer!
-        }
+    if (init.disp.endCommandBuffer(data.command_buffers[imageIndex]) != VK_SUCCESS) {
+        std::cout << "failed to record command buffer\n";
+        return -1;
     }
+
     return 0;
 }
 
@@ -514,6 +532,11 @@ int draw_frame(Init& init, RenderData& data) {
     }
     data.image_in_flight[image_index] = data.in_flight_fences[data.current_frame];
 
+    // Record the command buffer for this frame
+    if (record_command_buffer(init, data, image_index) != 0) {
+        return -1;
+    }
+
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -562,11 +585,23 @@ int draw_frame(Init& init, RenderData& data) {
 }
 
 void cleanup(Init& init, RenderData& data) {
+
+    init.disp.deviceWaitIdle();
+
+    // Cleanup ImGui
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    init.disp.destroyDescriptorPool(data.descriptor_pool, nullptr);
+
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         init.disp.destroySemaphore(data.finished_semaphore[i], nullptr);
         init.disp.destroySemaphore(data.available_semaphores[i], nullptr);
         init.disp.destroyFence(data.in_flight_fences[i], nullptr);
     }
+
+    init.disp.freeCommandBuffers(data.command_pool, data.command_buffers.size(), data.command_buffers.data());
 
     init.disp.destroyCommandPool(data.command_pool, nullptr);
 
@@ -592,6 +627,63 @@ void cleanup(Init& init, RenderData& data) {
     destroy_window_glfw(init.window);
 }
 
+int create_imgui(Init& init, RenderData& data) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForVulkan(init.window, true);
+    ImGui_ImplVulkan_InitInfo init_info = {};
+    init_info.Instance = init.instance.instance;
+    init_info.PhysicalDevice = init.physical_device.physical_device;
+    init_info.Device = init.device.device;
+    init_info.QueueFamily = init.device.get_queue_index(vkb::QueueType::graphics).value();
+    init_info.Queue = data.graphics_queue;
+    init_info.PipelineCache = VK_NULL_HANDLE;
+    init_info.DescriptorPool = data.descriptor_pool;
+    init_info.Allocator = nullptr;
+    init_info.MinImageCount = init.swapchain.image_count;
+    init_info.ImageCount = init.swapchain.image_count;
+    init_info.CheckVkResultFn = nullptr;
+    init_info.RenderPass = data.render_pass;
+    ImGui_ImplVulkan_Init(&init_info);
+
+    ImGui_ImplVulkan_CreateFontsTexture();
+
+    return 0;
+}
+
+int create_descriptor_pool(Init& init, RenderData& data) {
+    VkDescriptorPoolSize pool_sizes[] =
+            {
+                    {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                    {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+                    {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+                    {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+                    {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+                    {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+                    {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+                    {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+                    {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+                    {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}
+            };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1;
+    pool_info.poolSizeCount = (uint32_t) IM_ARRAYSIZE(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+
+
+    if (init.disp.createDescriptorPool(&pool_info, nullptr, &data.descriptor_pool) != VK_SUCCESS) {
+        std::cout << "failed to create descriptor pool\n";
+        return -1; // failed to create descriptor pool
+    }
+    return 0;
+}
+
 int main() {
     Init init;
     RenderData render_data;
@@ -605,6 +697,8 @@ int main() {
     if (0 != create_command_pool(init, render_data)) return -1;
     if (0 != create_command_buffers(init, render_data)) return -1;
     if (0 != create_sync_objects(init, render_data)) return -1;
+    if (0 != create_descriptor_pool(init, render_data)) return -1;
+    if (0 != create_imgui(init, render_data)) return -1;
 
     create_buffer(init,
                   sizeof(vertices[0]) * vertices.size(),
@@ -612,14 +706,21 @@ int main() {
                   VMA_MEMORY_USAGE_CPU_TO_GPU,
                   render_data.vertex_buffer);
 
-
     while (!glfwWindowShouldClose(init.window)) {
         glfwPollEvents();
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow();
+
         int res = draw_frame(init, render_data);
         if (res != 0) {
             std::cout << "failed to draw frame \n";
             return -1;
         }
+
+
     }
     init.disp.deviceWaitIdle();
 

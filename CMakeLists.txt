@@ -31,11 +31,14 @@ endfunction()
 
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui")
 
 # Collect all the source files
 file(GLOB_RECURSE SRC_FILES
         "${SRC_DIR}/*.cpp"
         "${SRC_DIR}/*.hpp"
+        "${IMGUI_DIR}/*.cpp"
+        "${IMGUI_DIR}/*.h"
 )
 
 add_executable(toyrenderer ${SRC_FILES})
