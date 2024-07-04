@@ -5,6 +5,8 @@
 #include "../extern/imgui/imgui_impl_glfw.h"
 #include "../extern/imgui/imgui_impl_vulkan.h"
 
+#include "camera.hpp"
+
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<Vertex> vertices = {
@@ -27,7 +29,18 @@ const std::vector<uint16_t> indices = {
         0, 1, 5, 5, 4, 0
 };
 
+void updateUniformBuffer(uint32_t current, Init &init, RenderData& renderData) {
+    UniformBufferObject ubo = {};
+    ubo.model = glm::mat4(1.0f);
+    ubo.view = renderData.camera.getViewMatrix();
+    ubo.proj = renderData.camera.getProjectionMatrix();
 
+    void* data;
+    vmaMapMemory(init.allocator, renderData.uniform_buffers[current].allocation, &data);
+    memcpy(data, &ubo, sizeof(ubo));
+    vmaUnmapMemory(init.allocator, renderData.uniform_buffers[current].allocation);
+
+}
 
 GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true) {
     glfwInit();
@@ -317,7 +330,8 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = 0;
+    pipeline_layout_info.setLayoutCount = 1;
+    pipeline_layout_info.pSetLayouts = &data.descriptor_set_layout;
     pipeline_layout_info.pushConstantRangeCount = 0;
 
     if (init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &data.pipeline_layout) != VK_SUCCESS) {
@@ -441,6 +455,9 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 
+    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
+
+
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -532,6 +549,8 @@ int draw_frame(Init& init, RenderData& data) {
     }
     data.image_in_flight[image_index] = data.in_flight_fences[data.current_frame];
 
+    updateUniformBuffer(data.current_frame, init, data);
+
     // Record the command buffer for this frame
     if (record_command_buffer(init, data, image_index) != 0) {
         return -1;
@@ -592,6 +611,12 @@ void cleanup(Init& init, RenderData& data) {
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+
+    for (size_t i = 0; i < init.swapchain.image_count; i++) {
+        vmaDestroyBuffer(init.allocator, data.uniform_buffers[i].buffer, data.uniform_buffers[i].allocation);
+    }
+
+    init.disp.destroyDescriptorSetLayout(data.descriptor_set_layout, nullptr);
 
     init.disp.destroyDescriptorPool(data.descriptor_pool, nullptr);
 
@@ -672,7 +697,7 @@ int create_descriptor_pool(Init& init, RenderData& data) {
     VkDescriptorPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 1;
+    pool_info.maxSets = 10;
     pool_info.poolSizeCount = (uint32_t) IM_ARRAYSIZE(pool_sizes);
     pool_info.pPoolSizes = pool_sizes;
 
@@ -684,6 +709,89 @@ int create_descriptor_pool(Init& init, RenderData& data) {
     return 0;
 }
 
+
+
+void processInput(GLFWwindow* window, float deltaTime, Camera& camera) {
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.processKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.processKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.processKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.processKeyboard(RIGHT, deltaTime);
+}
+
+int create_descriptor_set_layout(Init& init, RenderData& renderData) {
+    VkDescriptorSetLayoutBinding ubo_layout_binding = {};
+    ubo_layout_binding.binding = 0;
+    ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    ubo_layout_binding.descriptorCount = 1;
+    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    ubo_layout_binding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutBinding bindings[] = {ubo_layout_binding};
+
+    VkDescriptorSetLayoutCreateInfo layout_info = {};
+    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_info.bindingCount = 1;
+    layout_info.pBindings = bindings;
+
+    if (init.disp.createDescriptorSetLayout(&layout_info, nullptr, &renderData.descriptor_set_layout) != VK_SUCCESS) {
+        std::cout << "failed to create descriptor set layout\n";
+        return -1;
+    }
+    return 0;
+}
+
+int create_descriptor_sets(Init& init, RenderData& renderData) {
+    std::vector<VkDescriptorSetLayout> layouts(init.swapchain.image_count, renderData.descriptor_set_layout);
+
+    VkDescriptorSetAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = renderData.descriptor_pool;
+    alloc_info.descriptorSetCount = static_cast<uint32_t>(init.swapchain.image_count);
+    alloc_info.pSetLayouts = layouts.data();
+
+    renderData.descriptor_sets.resize(init.swapchain.image_count);
+    if (init.disp.allocateDescriptorSets(&alloc_info, renderData.descriptor_sets.data()) != VK_SUCCESS) {
+        std::cout << "failed to allocate descriptor sets\n";
+        return -1;
+    }
+
+    for (size_t i = 0; i < init.swapchain.image_count; i++) {
+        VkDescriptorBufferInfo buffer_info = {};
+        buffer_info.buffer = renderData.uniform_buffers[i].buffer;
+        buffer_info.offset = 0;
+        buffer_info.range = sizeof(UniformBufferObject);
+
+        VkWriteDescriptorSet descriptor_write = {};
+        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_write.dstSet = renderData.descriptor_sets[i];
+        descriptor_write.dstBinding = 0;
+        descriptor_write.dstArrayElement = 0;
+        descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_write.descriptorCount = 1;
+        descriptor_write.pBufferInfo = &buffer_info;
+
+        init.disp.updateDescriptorSets(1, &descriptor_write, 0, nullptr);
+    }
+    return 0;
+}
+
+int create_uniform_buffers(Init& init, RenderData& renderData) {
+    renderData.uniform_buffers.resize(init.swapchain.image_count);
+    for (size_t i = 0; i < init.swapchain.image_count; i++) {
+        create_buffer(init,
+                      sizeof(UniformBufferObject),
+                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VMA_MEMORY_USAGE_CPU_TO_GPU,
+                      renderData.uniform_buffers[i]);
+    }
+
+    return 0;
+}
+
 int main() {
     Init init;
     RenderData render_data;
@@ -692,6 +800,7 @@ int main() {
     if (0 != create_swapchain(init)) return -1;
     if (0 != get_queues(init, render_data)) return -1;
     if (0 != create_render_pass(init, render_data)) return -1;
+    if (0 != create_descriptor_set_layout(init, render_data)) return -1;
     if (0 != create_graphics_pipeline(init, render_data)) return -1;
     if (0 != create_framebuffers(init, render_data)) return -1;
     if (0 != create_command_pool(init, render_data)) return -1;
@@ -699,6 +808,8 @@ int main() {
     if (0 != create_sync_objects(init, render_data)) return -1;
     if (0 != create_descriptor_pool(init, render_data)) return -1;
     if (0 != create_imgui(init, render_data)) return -1;
+    if (0 != create_uniform_buffers(init, render_data)) return -1;
+    if (0 != create_descriptor_sets(init, render_data)) return -1;
 
     create_buffer(init,
                   sizeof(vertices[0]) * vertices.size(),
@@ -706,8 +817,18 @@ int main() {
                   VMA_MEMORY_USAGE_CPU_TO_GPU,
                   render_data.vertex_buffer);
 
+    auto lastTime = std::chrono::high_resolution_clock::now();
+    float deltaTime = 0.0f;
+
     while (!glfwWindowShouldClose(init.window)) {
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+        lastTime = currentTime;
+
         glfwPollEvents();
+
+        processInput(init.window, deltaTime, render_data.camera);
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -724,6 +845,9 @@ int main() {
     }
     init.disp.deviceWaitIdle();
 
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        cleanup_buffer(init, render_data.uniform_buffers[i]);
+    }
     cleanup_buffer(init, render_data.vertex_buffer);
 
     cleanup(init, render_data);

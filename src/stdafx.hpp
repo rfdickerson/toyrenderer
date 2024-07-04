@@ -6,6 +6,7 @@
 #include <memory>
 #include <array>
 #include <fstream>
+#include <chrono>
 
 #include <VkBootstrap.h>
 #include <vk_mem_alloc.h>

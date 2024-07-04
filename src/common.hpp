@@ -1,10 +1,6 @@
-//
-// Created by Robert F. Dickerson on 7/1/24.
-//
+#pragma once
 
-#ifndef TOYRENDERER_COMMON_HPP
-#define TOYRENDERER_COMMON_HPP
-
+#include "camera.hpp"
 
 struct Init {
     GLFWwindow* window;
@@ -51,11 +47,14 @@ struct RenderData {
 
     BufferAllocation vertex_buffer;
     BufferAllocation index_buffer;
-    BufferAllocation uniform_buffer;
+
+    std::vector<BufferAllocation> uniform_buffers;
 
     VkDescriptorPool descriptor_pool;
     VkDescriptorSetLayout descriptor_set_layout;
-    VkDescriptorSet descriptor_set;
+    std::vector<VkDescriptorSet> descriptor_sets;
+
+    Camera camera;
 
 };
 
@@ -86,4 +85,4 @@ struct UniformBufferObject {
     glm::mat4 proj;
 };
 
-#endif //TOYRENDERER_COMMON_HPP
+
