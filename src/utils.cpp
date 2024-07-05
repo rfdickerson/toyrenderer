@@ -35,3 +35,33 @@ void end_single_time_commands(Init& init, VkCommandBuffer commandBuffer) {
 
     init.disp.freeCommandBuffers(init.command_pool, 1, &commandBuffer);
 }
+
+void create_buffer(Init& init,
+                   VkDeviceSize size,
+                   VkBufferUsageFlags usage,
+                   VmaMemoryUsage memoryUsage,
+                   BufferAllocation& bufferAllocation) {
+
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = memoryUsage;
+
+    if (vmaCreateBuffer(init.allocator, &bufferInfo, &allocInfo,
+                        &bufferAllocation.buffer,
+                        &bufferAllocation.allocation,
+                        nullptr) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create buffer!");
+    }
+
+    bufferAllocation.size = size;
+}
+
+void cleanup_buffer(Init& init, BufferAllocation& bufferAllocation) {
+    vmaDestroyBuffer(init.allocator, bufferAllocation.buffer, bufferAllocation.allocation);
+    bufferAllocation.buffer = VK_NULL_HANDLE;
+}

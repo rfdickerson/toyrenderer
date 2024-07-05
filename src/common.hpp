@@ -1,10 +1,6 @@
-//
-// Created by Robert F. Dickerson on 7/1/24.
-//
+#pragma once
 
-#ifndef TOYRENDERER_COMMON_HPP
-#define TOYRENDERER_COMMON_HPP
-
+#include "camera.hpp"
 
 struct Init {
     GLFWwindow* window;
@@ -24,6 +20,7 @@ struct Init {
 struct BufferAllocation {
     VkBuffer buffer;
     VmaAllocation allocation;
+    VkDeviceSize size;
 };
 
 struct RenderData {
@@ -50,41 +47,44 @@ struct RenderData {
 
     BufferAllocation vertex_buffer;
     BufferAllocation index_buffer;
-    BufferAllocation uniform_buffer;
+
+    std::vector<BufferAllocation> uniform_buffers;
 
     VkDescriptorPool descriptor_pool;
     VkDescriptorSetLayout descriptor_set_layout;
-    VkDescriptorSet descriptor_set;
+    std::vector<VkDescriptorSet> descriptor_sets;
+
+    Camera camera;
+
+    struct {
+        VkImage image;
+        VmaAllocation allocation;
+        VkImageView view;
+    } depth_image;
+
+    VkImageView depth_image_view;
 
 };
 
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
+};
 
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return bindingDescription;
-    }
+struct InstanceData {
+    glm::mat4 model;
+};
 
-    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
-        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
-
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-        return attributeDescriptions;
-    }
+struct InstancedRenderData {
+    BufferAllocation vertex_buffer;
+    BufferAllocation instance_buffer;
+    uint32_t vertex_count;
+    uint32_t instance_count;
+    uint32_t max_instance_count;
+    VkDescriptorSetLayout descriptor_set_layout;
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSet descriptor_set;
+    VkPipelineLayout pipeline_layout;
 };
 
 struct UniformBufferObject {
@@ -93,4 +93,4 @@ struct UniformBufferObject {
     glm::mat4 proj;
 };
 
-#endif //TOYRENDERER_COMMON_HPP
+
