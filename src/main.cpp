@@ -21,12 +21,18 @@ const std::vector<Vertex> vertices = {
 };
 
 const std::vector<uint16_t> indices = {
+        // Front face
         0, 1, 2, 2, 3, 0,
-        4, 5, 6, 6, 7, 4,
-        0, 4, 7, 7, 3, 0,
+        // Back face
+        4, 7, 6, 6, 5, 4,
+        // Left face
+        0, 3, 7, 7, 4, 0,
+        // Right face
         1, 5, 6, 6, 2, 1,
+        // Top face
         3, 2, 6, 6, 7, 3,
-        0, 1, 5, 5, 4, 0
+        // Bottom face
+        0, 4, 5, 5, 1, 0
 };
 
 void copy_buffer(Init& init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
@@ -436,7 +442,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling = {};
