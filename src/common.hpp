@@ -56,6 +56,14 @@ struct RenderData {
 
     Camera camera;
 
+    struct {
+        VkImage image;
+        VmaAllocation allocation;
+        VkImageView view;
+    } depth_image;
+
+    VkImageView depth_image_view;
+
 };
 
 struct Vertex {
