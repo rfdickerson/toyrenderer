@@ -26,8 +26,6 @@ public:
 
     void processMouseScroll(float yoffset);
 
-private:
-
     void updateCameraVectors();
 
     glm::vec3 position;

@@ -29,6 +29,111 @@ const std::vector<uint16_t> indices = {
         0, 1, 5, 5, 4, 0
 };
 
+void copy_buffer(Init& init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = init.command_pool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    if (init.disp.allocateCommandBuffers(&allocInfo, &commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate command buffer");
+    }
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    if (init.disp.beginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("failed to begin command buffer");
+    }
+
+    VkBufferCopy copyRegion{};
+    copyRegion.size = size;
+    init.disp.cmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+    if (init.disp.endCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to end command buffer");
+    }
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkFence fence;
+
+    if (init.disp.createFence(&fenceInfo, nullptr, &fence) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create fence");
+    }
+
+    if (init.disp.queueSubmit(init.graphics_queue, 1, &submitInfo, fence) != VK_SUCCESS) {
+        throw std::runtime_error("failed to submit copy command buffer");
+    }
+
+    if (init.disp.waitForFences(1, &fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
+        throw std::runtime_error("failed to wait for fence");
+    }
+
+    init.disp.destroyFence(fence, nullptr);
+
+    init.disp.freeCommandBuffers(init.command_pool, 1, &commandBuffer);
+}
+
+int create_vertex_buffer(Init& init, RenderData& data) {
+    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+    // Create a staging buffer
+    BufferAllocation stagingBuffer;
+    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
+
+    // Map the staging buffer and copy the vertex data to it
+    void* mappedData;
+    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
+    memcpy(mappedData, vertices.data(), bufferSize);
+    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
+
+    // Create the vertex buffer
+    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.vertex_buffer);
+
+    // Copy the data from the staging buffer to the vertex buffer
+    copy_buffer(init, stagingBuffer.buffer, data.vertex_buffer.buffer, bufferSize);
+
+    // Clean up the staging buffer
+    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
+
+    return 0;
+}
+
+int create_index_buffer(Init& init, RenderData& data) {
+    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    // Create a staging buffer
+    BufferAllocation stagingBuffer;
+    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
+
+    // Map the staging buffer and copy the index data to it
+    void* mappedData;
+    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
+    memcpy(mappedData, indices.data(), bufferSize);
+    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
+
+    // Create the index buffer
+    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.index_buffer);
+
+    // Copy the data from the staging buffer to the index buffer
+    copy_buffer(init, stagingBuffer.buffer, data.index_buffer.buffer, bufferSize);
+
+    // Clean up the staging buffer
+    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
+
+    return 0;
+}
+
+
 void updateUniformBuffer(uint32_t current, Init &init, RenderData& renderData) {
     UniformBufferObject ubo = {};
     ubo.model = glm::mat4(1.0f);
@@ -112,6 +217,14 @@ int device_initialization(Init& init) {
     init.device = device_ret.value();
 
     init.disp = init.device.make_table();
+
+    // get graphics queue
+    auto graphics_queue_ret = init.device.get_queue(vkb::QueueType::graphics);
+    if (!graphics_queue_ret) {
+        std::cout << graphics_queue_ret.error().message() << "\n";
+        return -1;
+    }
+    init.graphics_queue = graphics_queue_ret.value();
 
     VkCommandPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -268,10 +381,29 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
 
     VkPipelineShaderStageCreateInfo shader_stages[] = { vert_stage_info, frag_stage_info };
 
+    VkVertexInputBindingDescription bindingDescription;
+    bindingDescription.binding = 0;
+    bindingDescription.stride = sizeof(Vertex);
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+    attributeDescriptions[0].binding = 0;
+    attributeDescriptions[0].location = 0;
+    attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].location = 1;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[1].offset = offsetof(Vertex, color);
+
     VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
     vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input_info.vertexBindingDescriptionCount = 0;
-    vertex_input_info.vertexAttributeDescriptionCount = 0;
+    vertex_input_info.vertexBindingDescriptionCount = 1;
+    vertex_input_info.pVertexBindingDescriptions = &bindingDescription;
+    vertex_input_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    vertex_input_info.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -454,6 +586,11 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
     init.disp.cmdBeginRenderPass(data.command_buffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+    VkBuffer vertexBuffers[] = {data.vertex_buffer.buffer};
+    VkDeviceSize offsets[] = {0};
+    init.disp.cmdBindVertexBuffers(data.command_buffers[imageIndex], 0, 1, vertexBuffers, offsets);
+
+    init.disp.cmdBindIndexBuffer(data.command_buffers[imageIndex], data.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
 
     init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
 
@@ -472,7 +609,7 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
     scissor.extent = init.swapchain.extent;
     init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
 
-    init.disp.cmdDraw(data.command_buffers[imageIndex], 3, 1, 0, 0);
+    init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
     // Render ImGui
     ImGui::Render();
@@ -549,7 +686,7 @@ int draw_frame(Init& init, RenderData& data) {
     }
     data.image_in_flight[image_index] = data.in_flight_fences[data.current_frame];
 
-    updateUniformBuffer(data.current_frame, init, data);
+    updateUniformBuffer(image_index, init, data);
 
     // Record the command buffer for this frame
     if (record_command_buffer(init, data, image_index) != 0) {
@@ -810,12 +947,9 @@ int main() {
     if (0 != create_imgui(init, render_data)) return -1;
     if (0 != create_uniform_buffers(init, render_data)) return -1;
     if (0 != create_descriptor_sets(init, render_data)) return -1;
+    if (0 != create_vertex_buffer(init, render_data)) return -1;
+    if (0 != create_index_buffer(init, render_data)) return -1;
 
-    create_buffer(init,
-                  sizeof(vertices[0]) * vertices.size(),
-                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                  VMA_MEMORY_USAGE_CPU_TO_GPU,
-                  render_data.vertex_buffer);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;
@@ -833,7 +967,12 @@ int main() {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-        ImGui::ShowDemoWindow();
+        //ImGui::ShowDemoWindow();
+        ImGui::Begin("Hello, world!");
+        ImGui::Text("This is some useful text.");
+        // show camera coordinates
+        ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
+        ImGui::End();
 
         int res = draw_frame(init, render_data);
         if (res != 0) {
