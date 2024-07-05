@@ -847,14 +847,22 @@ void cleanup(Init& init, RenderData& data) {
 
     init.disp.deviceWaitIdle();
 
+    // Clean up depth resources
+    init.disp.destroyImageView(data.depth_image_view, nullptr);
+    vmaDestroyImage(init.allocator, data.depth_image.image, data.depth_image.allocation);
+
+    // Keep this loop for uniform buffer cleanup
+    for (size_t i = 0; i < init.swapchain.image_count; i++) {
+        vmaDestroyBuffer(init.allocator, data.uniform_buffers[i].buffer, data.uniform_buffers[i].allocation);
+    }
+
+    vmaDestroyBuffer(init.allocator, data.vertex_buffer.buffer, data.vertex_buffer.allocation);
+    vmaDestroyBuffer(init.allocator, data.index_buffer.buffer, data.index_buffer.allocation);
+
     // Cleanup ImGui
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
-
-    for (size_t i = 0; i < init.swapchain.image_count; i++) {
-        vmaDestroyBuffer(init.allocator, data.uniform_buffers[i].buffer, data.uniform_buffers[i].allocation);
-    }
 
     init.disp.destroyDescriptorSetLayout(data.descriptor_set_layout, nullptr);
 
@@ -1089,10 +1097,7 @@ int main() {
     }
     init.disp.deviceWaitIdle();
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        cleanup_buffer(init, render_data.uniform_buffers[i]);
-    }
-    cleanup_buffer(init, render_data.vertex_buffer);
+
 
     cleanup(init, render_data);
     return 0;
