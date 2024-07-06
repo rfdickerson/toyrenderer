@@ -12,3 +12,7 @@ void create_buffer(Init& init,
                    BufferAllocation& bufferAllocation);
 
 void cleanup_buffer(Init& init, BufferAllocation& bufferAllocation);
+
+VkShaderModule createShaderModule(Init& init, const std::vector<char>& code);
+
+ std::vector<char> readFile(const std::string& filename);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera.hpp"
+#include "shadow.hpp"
 
 struct Init {
     GLFWwindow* window;
@@ -63,6 +64,9 @@ struct RenderData {
     } depth_image;
 
     VkImageView depth_image_view;
+
+    ShadowMap shadow_map;
+    ShadowPipeline shadow_pipeline;
 
 };
 

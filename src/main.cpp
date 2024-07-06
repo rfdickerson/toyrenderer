@@ -413,38 +413,6 @@ int create_render_pass(Init& init, RenderData& data) {
     return 0;
 }
 
-std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
-    }
-
-    size_t file_size = (size_t)file.tellg();
-    std::vector<char> buffer(file_size);
-
-    file.seekg(0);
-    file.read(buffer.data(), static_cast<std::streamsize>(file_size));
-
-    file.close();
-
-    return buffer;
-}
-
-VkShaderModule createShaderModule(Init& init, const std::vector<char>& code) {
-    VkShaderModuleCreateInfo create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    create_info.codeSize = code.size();
-    create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-    VkShaderModule shaderModule;
-    if (init.disp.createShaderModule(&create_info, nullptr, &shaderModule) != VK_SUCCESS) {
-        return VK_NULL_HANDLE; // failed to create shader module
-    }
-
-    return shaderModule;
-}
-
 int create_graphics_pipeline(Init& init, RenderData& data) {
     auto vert_code = readFile("shaders/simple.vert.spv");
     auto frag_code = readFile("shaders/simple.frag.spv");
@@ -659,6 +627,22 @@ int create_command_buffers(Init& init, RenderData& data) {
     return 0;
 }
 
+void renderShadowMaps(Init &init, RenderData& data, VkCommandBuffer& buffer, uint32_t imageIndex) {
+    beginShadowRenderPass(buffer, data.shadow_map);
+
+    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline.pipeline);
+
+    VkBuffer vertexBuffers[] = {data.vertex_buffer.buffer};
+    VkDeviceSize offsets[] = {0};
+    init.disp.cmdBindVertexBuffers(data.command_buffers[imageIndex], 0, 1, vertexBuffers, offsets);
+    init.disp.cmdBindIndexBuffer(data.command_buffers[imageIndex], data.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
+
+    init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+    endShadowRenderPass(buffer);
+}
+
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
@@ -672,6 +656,8 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
         std::cout << "failed to begin recording command buffer\n";
         return -1;
     }
+
+    renderShadowMaps(init, data, data.command_buffers[imageIndex], imageIndex);
 
     std::array<VkClearValue, 2> clearValues = {};
     clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -846,6 +832,10 @@ int draw_frame(Init& init, RenderData& data) {
 void cleanup(Init& init, RenderData& data) {
 
     init.disp.deviceWaitIdle();
+
+    // clean up shadowmap
+    destroyShadowMap(data.shadow_map);
+    destroyShadowMappingPipeline(init, data.shadow_pipeline);
 
     // Clean up depth resources
     init.disp.destroyImageView(data.depth_image_view, nullptr);
@@ -1062,7 +1052,8 @@ int main() {
     if (0 != create_vertex_buffer(init, render_data)) return -1;
     if (0 != create_index_buffer(init, render_data)) return -1;
 
-
+    createShadowMap(init, render_data, render_data.shadow_map, 2048, 2048);
+    if (0 != createShadowMappingPipeline(init, render_data, render_data.shadow_pipeline)) return -1;
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;

@@ -61,7 +61,34 @@ void create_buffer(Init& init,
     bufferAllocation.size = size;
 }
 
-void cleanup_buffer(Init& init, BufferAllocation& bufferAllocation) {
-    vmaDestroyBuffer(init.allocator, bufferAllocation.buffer, bufferAllocation.allocation);
-    bufferAllocation.buffer = VK_NULL_HANDLE;
+std::vector<char> readFile(const std::string& filename) {
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open file!");
+    }
+
+    size_t file_size = (size_t)file.tellg();
+    std::vector<char> buffer(file_size);
+
+    file.seekg(0);
+    file.read(buffer.data(), static_cast<std::streamsize>(file_size));
+
+    file.close();
+
+    return buffer;
+}
+
+VkShaderModule createShaderModule(Init& init, const std::vector<char>& code) {
+    VkShaderModuleCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.codeSize = code.size();
+    create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+    VkShaderModule shaderModule;
+    if (init.disp.createShaderModule(&create_info, nullptr, &shaderModule) != VK_SUCCESS) {
+        return VK_NULL_HANDLE; // failed to create shader module
+    }
+
+    return shaderModule;
 }
