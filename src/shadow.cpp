@@ -162,13 +162,6 @@ void endShadowRenderPass(VkCommandBuffer commandBuffer) {
 VkResult createShadowMappingPipeline(Init & init, RenderData & data, ShadowPipeline & shadowPipeline) {
     const VkDevice device = init.device.device;
 
-    VkResult result = createShadowMappingDescriptorSetLayout(init, data, shadowPipeline);
-    if (result != VK_SUCCESS) {
-        return result;
-    }
-
-    shadowPipeline.descriptorSets = createShadowMappingDescriptorSets(init, data, shadowPipeline, 3);
-
     auto vertShaderCode = readFile("shaders/shadow.vert.spv");
     VkShaderModule vertShaderModule = createShaderModule(init, vertShaderCode);
 
@@ -254,10 +247,12 @@ VkResult createShadowMappingPipeline(Init & init, RenderData & data, ShadowPipel
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.attachmentCount = 0;
 
+    std::array<VkDescriptorSetLayout, 2> layouts = {data.descriptorSetLayouts.object, data.descriptorSetLayouts.camera};
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &shadowPipeline.descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(layouts.size());
+    pipelineLayoutInfo.pSetLayouts = layouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &shadowPipeline.layout) != VK_SUCCESS) {
@@ -290,63 +285,6 @@ VkResult createShadowMappingPipeline(Init & init, RenderData & data, ShadowPipel
 }
 
 void destroyShadowMappingPipeline(Init & init, ShadowPipeline & shadowPipeline) {
-    vkDestroyDescriptorSetLayout(init.device.device, shadowPipeline.descriptorSetLayout, nullptr);
     vkDestroyPipeline(init.device.device, shadowPipeline.pipeline, nullptr);
     vkDestroyPipelineLayout(init.device.device, shadowPipeline.layout, nullptr);
-    vkDestroyDescriptorSetLayout(init.device.device, shadowPipeline.descriptorSetLayout, nullptr);
-}
-
-VkResult createShadowMappingDescriptorSetLayout(Init& init, RenderData& data, ShadowPipeline& shadowPipeline)
-{
-    VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-    uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    uboLayoutBinding.pImmutableSamplers = nullptr;
-
-    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
-
-    return vkCreateDescriptorSetLayout(init.device.device, &layoutInfo, nullptr, &shadowPipeline.descriptorSetLayout);
-}
-
-std::vector<VkDescriptorSet> createShadowMappingDescriptorSets(Init& init, RenderData& data, ShadowPipeline& shadowPipeline, uint32_t framesInFlight)
-{
-    std::vector<VkDescriptorSet> descriptorSets(framesInFlight);
-
-    std::vector<VkDescriptorSetLayout> layouts(framesInFlight, shadowPipeline.descriptorSetLayout);
-
-    VkDescriptorSetAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = data.descriptor_pool;
-    allocInfo.descriptorSetCount = framesInFlight;
-    allocInfo.pSetLayouts = layouts.data();
-
-    if (vkAllocateDescriptorSets(init.device.device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate descriptor sets!");
-    }
-
-    return descriptorSets;
-}
-
-void updateShadowMappingDescriptorSets(Init& init, RenderData& data, ShadowPipeline& shadowPipeline, uint32_t currentImageIndex)
-{
-    VkDescriptorBufferInfo bufferInfo = {};
-    bufferInfo.buffer = data.uniform_buffers[currentImageIndex].buffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(ShadowData);
-
-    VkWriteDescriptorSet descriptorWrite = {};
-    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = shadowPipeline.descriptorSets[currentImageIndex];
-    descriptorWrite.dstBinding = 0;
-    descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.pBufferInfo = &bufferInfo;
-
-    vkUpdateDescriptorSets(init.device.device, 1, &descriptorWrite, 0, nullptr);
 }

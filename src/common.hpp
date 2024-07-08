@@ -24,6 +24,20 @@ struct BufferAllocation {
     VkDeviceSize size;
 };
 
+struct DescriptorSetLayouts {
+    VkDescriptorSetLayout object;
+    VkDescriptorSetLayout camera;
+    VkDescriptorSetLayout material;
+    VkDescriptorSetLayout light;
+};
+
+struct DescriptorSets {
+    VkDescriptorSet object;
+    VkDescriptorSet camera;
+    VkDescriptorSet material;
+    VkDescriptorSet light;
+};
+
 struct RenderData {
     VkQueue graphics_queue;
     VkQueue present_queue;
@@ -49,11 +63,13 @@ struct RenderData {
     BufferAllocation vertex_buffer;
     BufferAllocation index_buffer;
 
-    std::vector<BufferAllocation> uniform_buffers;
+    BufferAllocation objectBuffer;
+    BufferAllocation cameraBuffer;
 
     VkDescriptorPool descriptor_pool;
-    VkDescriptorSetLayout descriptor_set_layout;
-    std::vector<VkDescriptorSet> descriptor_sets;
+
+    DescriptorSetLayouts descriptorSetLayouts;
+    std::vector<DescriptorSets> descriptorSets;
 
     Camera camera;
 
@@ -91,10 +107,27 @@ struct InstancedRenderData {
     VkPipelineLayout pipeline_layout;
 };
 
+
 struct UniformBufferObject {
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
+};
+
+struct ObjectUbo {
+    glm::mat4 model;
+};
+
+struct CameraUbo {
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
+struct MaterialUbo {
+    glm::vec4 ambient;
+    glm::vec4 diffuse;
+    glm::vec4 specular;
+    float shininess;
 };
 
 

@@ -208,15 +208,23 @@ int create_index_buffer(Init& init, RenderData& data) {
 
 
 void updateUniformBuffer(uint32_t current, Init &init, RenderData& renderData) {
-    UniformBufferObject ubo = {};
+
+    ObjectUbo ubo = {};
     ubo.model = glm::mat4(1.0f);
-    ubo.view = renderData.camera.getViewMatrix();
-    ubo.proj = renderData.camera.getProjectionMatrix();
+
+    CameraUbo cameraUbo = {};
+    cameraUbo.view = renderData.camera.getViewMatrix();
+    cameraUbo.proj = renderData.camera.getProjectionMatrix();
 
     void* data;
-    vmaMapMemory(init.allocator, renderData.uniform_buffers[current].allocation, &data);
-    memcpy(data, &ubo, sizeof(ubo));
-    vmaUnmapMemory(init.allocator, renderData.uniform_buffers[current].allocation);
+    vmaMapMemory(init.allocator, renderData.objectBuffer.allocation, &data);
+    memcpy(static_cast<char*>(data) + (current * sizeof(ObjectUbo)), &ubo, sizeof(ubo));
+    vmaUnmapMemory(init.allocator, renderData.objectBuffer.allocation);
+
+    void* cameraData;
+    vmaMapMemory(init.allocator, renderData.cameraBuffer.allocation, &cameraData);
+    memcpy(static_cast<char*>(cameraData) + (current * sizeof(CameraUbo)), &cameraUbo, sizeof(cameraUbo));
+    vmaUnmapMemory(init.allocator, renderData.cameraBuffer.allocation);
 
 }
 
@@ -517,10 +525,12 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
+    std::array<VkDescriptorSetLayout, 2> layouts = {data.descriptorSetLayouts.object, data.descriptorSetLayouts.camera};
+
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = 1;
-    pipeline_layout_info.pSetLayouts = &data.descriptor_set_layout;
+    pipeline_layout_info.setLayoutCount = static_cast<uint32_t>(layouts.size());
+    pipeline_layout_info.pSetLayouts = layouts.data();
     pipeline_layout_info.pushConstantRangeCount = 0;
 
     if (init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &data.pipeline_layout) != VK_SUCCESS) {
@@ -561,7 +571,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     pipeline_info.pDepthStencilState = &depthStencil;
 
     if (init.disp.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &data.graphics_pipeline) != VK_SUCCESS) {
-        std::cout << "failed to create pipline\n";
+        std::cout << "failed to create pipeline\n";
         return -1; // failed to create graphics pipeline
     }
 
@@ -628,19 +638,20 @@ int create_command_buffers(Init& init, RenderData& data) {
 }
 
 void renderShadowMaps(Init &init, RenderData& data, VkCommandBuffer& buffer, uint32_t imageIndex) {
-    beginShadowRenderPass(buffer, data.shadow_map);
-
-    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline.pipeline);
-
-    VkBuffer vertexBuffers[] = {data.vertex_buffer.buffer};
-    VkDeviceSize offsets[] = {0};
-    init.disp.cmdBindVertexBuffers(data.command_buffers[imageIndex], 0, 1, vertexBuffers, offsets);
-    init.disp.cmdBindIndexBuffer(data.command_buffers[imageIndex], data.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
-    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
-
-    init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-
-    endShadowRenderPass(buffer);
+//    beginShadowRenderPass(buffer, data.shadow_map);
+//
+//    vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline.pipeline);
+//
+//    VkBuffer vertexBuffers[] = {data.vertex_buffer.buffer};
+//    VkDeviceSize offsets[] = {0};
+//    init.disp.cmdBindVertexBuffers(data.command_buffers[imageIndex], 0, 1, vertexBuffers, offsets);
+//    init.disp.cmdBindIndexBuffer(data.command_buffers[imageIndex], data.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+//
+//
+//
+//    init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+//
+//    endShadowRenderPass(buffer);
 }
 
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
@@ -681,7 +692,15 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.cmdBindIndexBuffer(data.command_buffers[imageIndex], data.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
 
-    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
+    uint32_t objectDynamicOffset = imageIndex * sizeof(ObjectUbo);
+    uint32_t cameraDynamicOffset = imageIndex * sizeof(CameraUbo);
+
+    std::array<uint32_t, 2> dynamicOffsets = {objectDynamicOffset, cameraDynamicOffset};
+
+    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout,
+                                    0, 1, &data.descriptorSets[imageIndex].object, 1, &dynamicOffsets[0]);
+    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout,
+                                    1, 1, &data.descriptorSets[imageIndex].camera, 1, &dynamicOffsets[1]);
 
 
     VkViewport viewport{};
@@ -842,9 +861,10 @@ void cleanup(Init& init, RenderData& data) {
     vmaDestroyImage(init.allocator, data.depth_image.image, data.depth_image.allocation);
 
     // Keep this loop for uniform buffer cleanup
-    for (size_t i = 0; i < init.swapchain.image_count; i++) {
-        vmaDestroyBuffer(init.allocator, data.uniform_buffers[i].buffer, data.uniform_buffers[i].allocation);
-    }
+
+    vmaDestroyBuffer(init.allocator, data.objectBuffer.buffer, data.objectBuffer.allocation);
+    vmaDestroyBuffer(init.allocator, data.cameraBuffer.buffer, data.cameraBuffer.allocation);
+
 
     vmaDestroyBuffer(init.allocator, data.vertex_buffer.buffer, data.vertex_buffer.allocation);
     vmaDestroyBuffer(init.allocator, data.index_buffer.buffer, data.index_buffer.allocation);
@@ -854,7 +874,8 @@ void cleanup(Init& init, RenderData& data) {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    init.disp.destroyDescriptorSetLayout(data.descriptor_set_layout, nullptr);
+    init.disp.destroyDescriptorSetLayout(data.descriptorSetLayouts.object, nullptr);
+    init.disp.destroyDescriptorSetLayout(data.descriptorSetLayouts.camera, nullptr);
 
     init.disp.destroyDescriptorPool(data.descriptor_pool, nullptr);
 
@@ -960,72 +981,118 @@ void processInput(GLFWwindow* window, float deltaTime, Camera& camera) {
         camera.processKeyboard(RIGHT, deltaTime);
 }
 
-int create_descriptor_set_layout(Init& init, RenderData& renderData) {
-    VkDescriptorSetLayoutBinding ubo_layout_binding = {};
-    ubo_layout_binding.binding = 0;
-    ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ubo_layout_binding.descriptorCount = 1;
-    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    ubo_layout_binding.pImmutableSamplers = nullptr;
+int create_descriptor_set_layouts(Init& init, RenderData& renderData) {
+    VkDescriptorSetLayoutBinding objectBinding = {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = nullptr
+    };
 
-    VkDescriptorSetLayoutBinding bindings[] = {ubo_layout_binding};
+    VkDescriptorSetLayoutCreateInfo objectLayoutInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 1,
+            .pBindings = &objectBinding
+    };
 
-    VkDescriptorSetLayoutCreateInfo layout_info = {};
-    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_info.bindingCount = 1;
-    layout_info.pBindings = bindings;
+    init.disp.createDescriptorSetLayout(&objectLayoutInfo, nullptr, &renderData.descriptorSetLayouts.object);
 
-    if (init.disp.createDescriptorSetLayout(&layout_info, nullptr, &renderData.descriptor_set_layout) != VK_SUCCESS) {
-        std::cout << "failed to create descriptor set layout\n";
-        return -1;
-    }
+    VkDescriptorSetLayoutBinding cameraBinding = {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = nullptr
+    };
+
+    VkDescriptorSetLayoutCreateInfo cameraLayoutInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 1,
+            .pBindings = &cameraBinding
+    };
+
+    init.disp.createDescriptorSetLayout(&cameraLayoutInfo, nullptr, &renderData.descriptorSetLayouts.camera);
+
+
     return 0;
 }
 
 int create_descriptor_sets(Init& init, RenderData& renderData) {
-    std::vector<VkDescriptorSetLayout> layouts(init.swapchain.image_count, renderData.descriptor_set_layout);
-
-    VkDescriptorSetAllocateInfo alloc_info = {};
-    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = renderData.descriptor_pool;
-    alloc_info.descriptorSetCount = static_cast<uint32_t>(init.swapchain.image_count);
-    alloc_info.pSetLayouts = layouts.data();
-
-    renderData.descriptor_sets.resize(init.swapchain.image_count);
-    if (init.disp.allocateDescriptorSets(&alloc_info, renderData.descriptor_sets.data()) != VK_SUCCESS) {
-        std::cout << "failed to allocate descriptor sets\n";
-        return -1;
-    }
+    renderData.descriptorSets.resize(init.swapchain.image_count);
 
     for (size_t i = 0; i < init.swapchain.image_count; i++) {
-        VkDescriptorBufferInfo buffer_info = {};
-        buffer_info.buffer = renderData.uniform_buffers[i].buffer;
-        buffer_info.offset = 0;
-        buffer_info.range = sizeof(UniformBufferObject);
+        // Allocate descriptor sets
+        VkDescriptorSetAllocateInfo allocInfo = {
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = renderData.descriptor_pool,
+                .descriptorSetCount = 1,
+                .pSetLayouts = &renderData.descriptorSetLayouts.object
+        };
+        init.disp.allocateDescriptorSets(&allocInfo, &renderData.descriptorSets[i].object);
 
-        VkWriteDescriptorSet descriptor_write = {};
-        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_write.dstSet = renderData.descriptor_sets[i];
-        descriptor_write.dstBinding = 0;
-        descriptor_write.dstArrayElement = 0;
-        descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_write.descriptorCount = 1;
-        descriptor_write.pBufferInfo = &buffer_info;
+        allocInfo.pSetLayouts = &renderData.descriptorSetLayouts.camera;
+        init.disp.allocateDescriptorSets(&allocInfo, &renderData.descriptorSets[i].camera);
 
-        init.disp.updateDescriptorSets(1, &descriptor_write, 0, nullptr);
+        VkDescriptorBufferInfo objectBufferInfo = {
+                .buffer = renderData.objectBuffer.buffer,
+                .offset = 0,
+                .range = sizeof(ObjectUbo)
+        };
+        VkWriteDescriptorSet objectWrite = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = renderData.descriptorSets[i].object,
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                .pBufferInfo = &objectBufferInfo
+        };
+
+        VkDescriptorBufferInfo cameraBufferInfo = {
+                .buffer = renderData.cameraBuffer.buffer,
+                .offset = 0,
+                .range = sizeof(CameraUbo)
+        };
+
+        VkWriteDescriptorSet cameraWrite = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = renderData.descriptorSets[i].camera,
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                .pBufferInfo = &cameraBufferInfo
+        };
+
+        std::array<VkWriteDescriptorSet, 2> descriptorWrites = {
+                objectWrite,
+                cameraWrite
+        };
+
+        init.disp.updateDescriptorSets(descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+
+
     }
+
     return 0;
 }
 
 int create_uniform_buffers(Init& init, RenderData& renderData) {
-    renderData.uniform_buffers.resize(init.swapchain.image_count);
-    for (size_t i = 0; i < init.swapchain.image_count; i++) {
-        create_buffer(init,
-                      sizeof(UniformBufferObject),
-                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                      VMA_MEMORY_USAGE_CPU_TO_GPU,
-                      renderData.uniform_buffers[i]);
-    }
+    VkDeviceSize objectBufferSize = init.swapchain.image_count * sizeof(ObjectUbo);
+    VkDeviceSize cameraBufferSize = init.swapchain.image_count * sizeof(CameraUbo);
+
+    create_buffer(init,
+                  objectBufferSize,
+                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                  VMA_MEMORY_USAGE_CPU_TO_GPU,
+                  renderData.objectBuffer);
+
+    create_buffer(init,
+                  cameraBufferSize,
+                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                  VMA_MEMORY_USAGE_CPU_TO_GPU,
+                  renderData.cameraBuffer);
 
     return 0;
 }
@@ -1038,7 +1105,7 @@ int main() {
     if (0 != create_swapchain(init)) return -1;
     if (0 != get_queues(init, render_data)) return -1;
     if (0 != create_render_pass(init, render_data)) return -1;
-    if (0 != create_descriptor_set_layout(init, render_data)) return -1;
+    if (0 != create_descriptor_set_layouts(init, render_data)) return -1;
     if (0 != createDepthResources(init, render_data)) return -1;
     if (0 != create_graphics_pipeline(init, render_data)) return -1;
     if (0 != create_framebuffers(init, render_data)) return -1;

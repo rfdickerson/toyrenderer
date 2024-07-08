@@ -20,12 +20,9 @@ struct ShadowMap {
 struct ShadowPipeline {
     VkPipeline pipeline;
     VkPipelineLayout layout;
-    VkDescriptorSetLayout descriptorSetLayout;
-
-    std::vector<VkDescriptorSet> descriptorSets;
 };
 
-struct ShadowData {
+struct ShadowUniformBufferObject {
     glm::mat4 lightSpaceMatrix;
     glm::mat4 model;
 };
