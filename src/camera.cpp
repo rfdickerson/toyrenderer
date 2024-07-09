@@ -21,6 +21,8 @@ void Camera::updateCameraVectors() {
     newFront.y = sin(glm::radians(pitch));
     newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     front = glm::normalize(newFront);
+    right = glm::normalize(glm::cross(front, up));
+    up = glm::normalize(glm::cross(right, front));
 }
 
 glm::mat4 Camera::getViewMatrix() const {

@@ -17,10 +17,10 @@ const std::vector<Vertex> vertices = {
         {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-left
 
         // Back face
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
-        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
-        {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
-        {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
+        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
+        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
+        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
 
         // Top face
         {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Front-left
@@ -30,9 +30,9 @@ const std::vector<Vertex> vertices = {
 
         // Bottom face
         {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Back-left
-        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
+        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
         {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Front-right
-        {{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
+        {{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
 
         // Right face
         {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-front
@@ -41,10 +41,10 @@ const std::vector<Vertex> vertices = {
         {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-back
 
         // Left face
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
-        {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
-        {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
-        {{-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
+        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
+        {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
+        {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
 };
 
 
@@ -1257,6 +1257,31 @@ int create_uniform_buffers(Init& init, RenderData& renderData) {
     return 0;
 }
 
+static void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
+    static float lastX = 800 / 2.0f;
+    static float lastY = 600 / 2.0f;
+    static bool firstMouse = true;
+
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
+    if (firstMouse) {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+
+    lastX = xpos;
+    lastY = ypos;
+
+    auto render_data = static_cast<RenderData*>(glfwGetWindowUserPointer(window));
+
+    render_data->camera.processMouseMovement(xoffset, yoffset);
+}
+
 int main() {
     Init init;
     RenderData render_data;
@@ -1284,12 +1309,20 @@ int main() {
     if (0 != createShadowMappingPipeline(init, render_data, render_data.shadow_pipeline)) return -1;
 
     auto defaultLight = Light {};
-    defaultLight.position = glm::vec4(0.0f, 5.0f, 0.0f, 1.0f);
+    defaultLight.position = glm::vec4(5.0f, -5.0f, 0.0f, 1.0f);
     defaultLight.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     render_data.lights.push_back(defaultLight);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;
+
+    float lastX = 800.0f / 2.0;
+    float lastY = 600.0 / 2.0;
+    bool firstMouse = true;
+
+    glfwSetWindowUserPointer(init.window, &render_data);
+    glfwSetCursorPosCallback(init.window, mouse_callback);
+    glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     while (!glfwWindowShouldClose(init.window)) {
 
@@ -1300,6 +1333,10 @@ int main() {
         glfwPollEvents();
 
         processInput(init.window, deltaTime, render_data.camera);
+        // check if escape pressed
+        if (glfwGetKey(init.window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(init.window, true);
+        }
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
