@@ -38,6 +38,18 @@ struct DescriptorSets {
     VkDescriptorSet light;
 };
 
+// Light struct for uniform buffer object
+// 64 bytes
+struct Light {
+    glm::vec4 position; // 16
+    glm::vec4 color; // 16
+    glm::vec4 direction; // 16
+    float radius; // for attenuation calculations // 4
+    float innerCutoff; // for spot lights 4
+    float outerCutoff; // for spot lights 4
+    float padding; // to ensure 16 byte alignment 4
+};
+
 struct RenderData {
     VkQueue graphics_queue;
     VkQueue present_queue;
@@ -65,6 +77,9 @@ struct RenderData {
 
     BufferAllocation objectBuffer;
     BufferAllocation cameraBuffer;
+    BufferAllocation materialBuffer;
+    BufferAllocation lightsBuffer;
+    BufferAllocation shadowsBuffer;
 
     VkDescriptorPool descriptor_pool;
 
@@ -72,6 +87,7 @@ struct RenderData {
     std::vector<DescriptorSets> descriptorSets;
 
     Camera camera;
+    std::vector<Light> lights;
 
     struct {
         VkImage image;
@@ -128,6 +144,20 @@ struct MaterialUbo {
     glm::vec4 diffuse;
     glm::vec4 specular;
     float shininess;
+};
+
+
+struct LightsUbo {
+    std::array<Light, 8> lights;
+    int numActiveLights;
+    glm::vec3 padding;
+};
+
+struct ShadowsUBO {
+    glm::mat4 lightSpaceMatrices[8];
+    float cascadeSplits[4];
+    int numActiveShadowMaps;
+    glm::vec3 padding;
 };
 
 

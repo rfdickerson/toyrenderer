@@ -35,6 +35,26 @@ const std::vector<uint16_t> indices = {
         0, 4, 5, 5, 1, 0
 };
 
+const size_t light_aligned_size = 1280;
+
+void updateLightsBuffer(const Init& init, RenderData& renderData, uint32_t currentImage) {
+
+    uint8_t* data;
+    vmaMapMemory(init.allocator, renderData.lightsBuffer.allocation, (void**)&data);
+
+    LightsUbo* lightsUbo = reinterpret_cast<LightsUbo*>(data + (currentImage * light_aligned_size));
+
+    // update lights data
+    for (size_t i = 0; i < renderData.lights.size(); i++) {
+        lightsUbo->lights[i] = renderData.lights[i];
+    }
+
+    lightsUbo->numActiveLights = renderData.lights.size();
+
+    vmaUnmapMemory(init.allocator, renderData.lightsBuffer.allocation);
+
+}
+
 VkFormat findSupportedFormat(Init& init, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
     for (VkFormat format : candidates) {
         VkFormatProperties props;
@@ -372,15 +392,15 @@ int create_render_pass(Init& init, RenderData& data) {
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    VkAttachmentDescription depthAttachment = {};
-    depthAttachment.format = findDepthFormat(init);
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    VkAttachmentDescription depth_attachment = {};
+    depth_attachment.format = findDepthFormat(init);
+    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference color_attachment_ref = {};
     color_attachment_ref.attachment = 0;
@@ -399,20 +419,30 @@ int create_render_pass(Init& init, RenderData& data) {
     VkSubpassDependency dependency = {};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
-    std::array<VkAttachmentDescription, 2> attachments = {color_attachment, depthAttachment};
+    VkSubpassDependency depth_dependency = {};
+    depth_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    depth_dependency.dstSubpass = 0;
+    depth_dependency.srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    depth_dependency.srcAccessMask = 0;
+    depth_dependency.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    depth_dependency.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+    std::array<VkSubpassDependency, 2> dependencies = {dependency, depth_dependency};
+
+    std::array<VkAttachmentDescription, 2> attachments = {color_attachment, depth_attachment};
     VkRenderPassCreateInfo render_pass_info = {};
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
     render_pass_info.pAttachments = attachments.data();
     render_pass_info.subpassCount = 1;
     render_pass_info.pSubpasses = &subpass;
-    render_pass_info.dependencyCount = 1;
-    render_pass_info.pDependencies = &dependency;
+    render_pass_info.dependencyCount = dependencies.size();
+    render_pass_info.pDependencies = dependencies.data();
 
     if (init.disp.createRenderPass(&render_pass_info, nullptr, &data.render_pass) != VK_SUCCESS) {
         std::cout << "failed to create render pass\n";
@@ -525,7 +555,11 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
-    std::array<VkDescriptorSetLayout, 2> layouts = {data.descriptorSetLayouts.object, data.descriptorSetLayouts.camera};
+    std::array<VkDescriptorSetLayout, 3> layouts = {
+            data.descriptorSetLayouts.object,
+            data.descriptorSetLayouts.camera,
+            data.descriptorSetLayouts.light,
+    };
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -656,23 +690,15 @@ void renderShadowMaps(Init &init, RenderData& data, VkCommandBuffer& buffer, uin
 
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
-    init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
-
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0; // Optional
-    beginInfo.pInheritanceInfo = nullptr; // Optional
 
     if (init.disp.beginCommandBuffer(data.command_buffers[imageIndex], &beginInfo) != VK_SUCCESS) {
         std::cout << "failed to begin recording command buffer\n";
         return -1;
     }
 
-    renderShadowMaps(init, data, data.command_buffers[imageIndex], imageIndex);
-
-    std::array<VkClearValue, 2> clearValues = {};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
+    //renderShadowMaps(init, data, data.command_buffers[imageIndex], imageIndex);
 
     VkRenderPassBeginInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -680,6 +706,11 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
     renderPassInfo.framebuffer = data.framebuffers[imageIndex];
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = init.swapchain.extent;
+
+    std::array<VkClearValue, 2> clearValues = {};
+    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValues[1].depthStencil = {1.0f, 0};
+
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
@@ -694,13 +725,16 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     uint32_t objectDynamicOffset = imageIndex * sizeof(ObjectUbo);
     uint32_t cameraDynamicOffset = imageIndex * sizeof(CameraUbo);
+    uint32_t lightDynamicOffset = imageIndex * light_aligned_size;
 
-    std::array<uint32_t, 2> dynamicOffsets = {objectDynamicOffset, cameraDynamicOffset};
+    std::array<uint32_t, 3> dynamicOffsets = {objectDynamicOffset, cameraDynamicOffset, lightDynamicOffset};
 
     init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout,
                                     0, 1, &data.descriptorSets[imageIndex].object, 1, &dynamicOffsets[0]);
     init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout,
                                     1, 1, &data.descriptorSets[imageIndex].camera, 1, &dynamicOffsets[1]);
+    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout,
+                2, 1, &data.descriptorSets[imageIndex].light, 1, &dynamicOffsets[2]);
 
 
     VkViewport viewport{};
@@ -795,6 +829,7 @@ int draw_frame(Init& init, RenderData& data) {
     data.image_in_flight[image_index] = data.in_flight_fences[data.current_frame];
 
     updateUniformBuffer(image_index, init, data);
+    updateLightsBuffer(init, data, image_index);
 
     // Record the command buffer for this frame
     if (record_command_buffer(init, data, image_index) != 0) {
@@ -860,8 +895,7 @@ void cleanup(Init& init, RenderData& data) {
     init.disp.destroyImageView(data.depth_image_view, nullptr);
     vmaDestroyImage(init.allocator, data.depth_image.image, data.depth_image.allocation);
 
-    // Keep this loop for uniform buffer cleanup
-
+    vmaDestroyBuffer(init.allocator, data.lightsBuffer.buffer, data.lightsBuffer.allocation);
     vmaDestroyBuffer(init.allocator, data.objectBuffer.buffer, data.objectBuffer.allocation);
     vmaDestroyBuffer(init.allocator, data.cameraBuffer.buffer, data.cameraBuffer.allocation);
 
@@ -876,6 +910,7 @@ void cleanup(Init& init, RenderData& data) {
 
     init.disp.destroyDescriptorSetLayout(data.descriptorSetLayouts.object, nullptr);
     init.disp.destroyDescriptorSetLayout(data.descriptorSetLayouts.camera, nullptr);
+    init.disp.destroyDescriptorSetLayout(data.descriptorSetLayouts.light, nullptr);
 
     init.disp.destroyDescriptorPool(data.descriptor_pool, nullptr);
 
@@ -1014,6 +1049,21 @@ int create_descriptor_set_layouts(Init& init, RenderData& renderData) {
 
     init.disp.createDescriptorSetLayout(&cameraLayoutInfo, nullptr, &renderData.descriptorSetLayouts.camera);
 
+    VkDescriptorSetLayoutBinding  bindings[] = {
+            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+    };
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = 2,
+            .pBindings = bindings
+    };
+
+    if (init.disp.createDescriptorSetLayout(&layoutInfo, nullptr, &renderData.descriptorSetLayouts.light) != VK_SUCCESS) {
+        std::cout << "failed to create descriptor set layout\n";
+        return -1; // failed to create descriptor set layout
+    }
 
     return 0;
 }
@@ -1030,9 +1080,20 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
                 .pSetLayouts = &renderData.descriptorSetLayouts.object
         };
         init.disp.allocateDescriptorSets(&allocInfo, &renderData.descriptorSets[i].object);
+        // add debug name
+        VkDebugUtilsObjectNameInfoEXT objectNameInfo = {
+                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                .objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+                .objectHandle = (uint64_t) renderData.descriptorSets[i].object,
+                .pObjectName = "Object Descriptor Set"
+        };
+        init.disp.setDebugUtilsObjectNameEXT(&objectNameInfo);
 
         allocInfo.pSetLayouts = &renderData.descriptorSetLayouts.camera;
         init.disp.allocateDescriptorSets(&allocInfo, &renderData.descriptorSets[i].camera);
+
+        allocInfo.pSetLayouts = &renderData.descriptorSetLayouts.light;
+        init.disp.allocateDescriptorSets(&allocInfo, &renderData.descriptorSets[i].light);
 
         VkDescriptorBufferInfo objectBufferInfo = {
                 .buffer = renderData.objectBuffer.buffer,
@@ -1065,12 +1126,49 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
                 .pBufferInfo = &cameraBufferInfo
         };
 
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites = {
-                objectWrite,
-                cameraWrite
+        VkDescriptorBufferInfo lightsBufferInfo = {
+                .buffer = renderData.lightsBuffer.buffer,
+                .offset = 0,
+                .range = light_aligned_size
         };
 
-        init.disp.updateDescriptorSets(descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+        VkDescriptorImageInfo shadowMapInfo = {
+                .sampler = renderData.shadow_map.sampler,
+                .imageView = renderData.shadow_map.view,
+                .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+        };
+
+        VkWriteDescriptorSet shadowMapWrite = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = renderData.descriptorSets[i].light,
+                .dstBinding = 1,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &shadowMapInfo
+        };
+
+        VkWriteDescriptorSet lightWrite = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = renderData.descriptorSets[i].light,
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                .pBufferInfo = &lightsBufferInfo
+        };
+
+        std::array<VkWriteDescriptorSet, 4> descriptorWrites = {
+                objectWrite,
+                cameraWrite,
+                lightWrite,
+                shadowMapWrite
+        };
+
+        init.disp.updateDescriptorSets(descriptorWrites.size(),
+                                       descriptorWrites.data(),
+                                       0,
+                                       nullptr);
 
 
     }
@@ -1081,6 +1179,7 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
 int create_uniform_buffers(Init& init, RenderData& renderData) {
     VkDeviceSize objectBufferSize = init.swapchain.image_count * sizeof(ObjectUbo);
     VkDeviceSize cameraBufferSize = init.swapchain.image_count * sizeof(CameraUbo);
+    VkDeviceSize lightBufferSize = init.swapchain.image_count * light_aligned_size;
 
     create_buffer(init,
                   objectBufferSize,
@@ -1088,11 +1187,25 @@ int create_uniform_buffers(Init& init, RenderData& renderData) {
                   VMA_MEMORY_USAGE_CPU_TO_GPU,
                   renderData.objectBuffer);
 
+    VkDebugUtilsObjectNameInfoEXT objectNameInfo = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .objectType = VK_OBJECT_TYPE_BUFFER,
+            .objectHandle = (uint64_t) renderData.objectBuffer.buffer,
+            .pObjectName = "Object UBO"
+    };
+    init.disp.setDebugUtilsObjectNameEXT(&objectNameInfo);
+
     create_buffer(init,
                   cameraBufferSize,
                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                   VMA_MEMORY_USAGE_CPU_TO_GPU,
                   renderData.cameraBuffer);
+
+    create_buffer(init,
+                  lightBufferSize,
+                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                  VMA_MEMORY_USAGE_CPU_TO_GPU,
+                  renderData.lightsBuffer);
 
     return 0;
 }
@@ -1107,6 +1220,7 @@ int main() {
     if (0 != create_render_pass(init, render_data)) return -1;
     if (0 != create_descriptor_set_layouts(init, render_data)) return -1;
     if (0 != createDepthResources(init, render_data)) return -1;
+    createShadowMap(init, render_data, render_data.shadow_map, 2048, 2048);
     if (0 != create_graphics_pipeline(init, render_data)) return -1;
     if (0 != create_framebuffers(init, render_data)) return -1;
     if (0 != create_command_pool(init, render_data)) return -1;
@@ -1119,8 +1233,13 @@ int main() {
     if (0 != create_vertex_buffer(init, render_data)) return -1;
     if (0 != create_index_buffer(init, render_data)) return -1;
 
-    createShadowMap(init, render_data, render_data.shadow_map, 2048, 2048);
+
     if (0 != createShadowMappingPipeline(init, render_data, render_data.shadow_pipeline)) return -1;
+
+    auto defaultLight = Light {};
+    defaultLight.position = glm::vec4(0.0f, 5.0f, 0.0f, 1.0f);
+    defaultLight.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    render_data.lights.push_back(defaultLight);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;

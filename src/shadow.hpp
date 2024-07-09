@@ -22,10 +22,6 @@ struct ShadowPipeline {
     VkPipelineLayout layout;
 };
 
-struct ShadowUniformBufferObject {
-    glm::mat4 lightSpaceMatrix;
-    glm::mat4 model;
-};
 
 VkResult createShadowMap(Init &init, RenderData& data, ShadowMap& shadowMap, uint32_t width, uint32_t height);
 void destroyShadowMap(ShadowMap& shadowMap);
@@ -35,9 +31,3 @@ void endShadowRenderPass(VkCommandBuffer commandBuffer);
 
 VkResult createShadowMappingPipeline(Init& init, RenderData& data, ShadowPipeline& shadowPipeline);
 void destroyShadowMappingPipeline(Init& init, ShadowPipeline& shadowPipeline);
-
-VkResult createShadowMappingDescriptorSetLayout(Init& init, RenderData& data, ShadowPipeline& shadowPipeline);
-
-std::vector<VkDescriptorSet> createShadowMappingDescriptorSets(Init& init, RenderData& data, ShadowPipeline& shadowPipeline, uint32_t framesInFlight);
-
-void updateShadowMappingDescriptorSets(Init& init, RenderData& data, ShadowPipeline& shadowPipeline, uint32_t currentImageIndex);
