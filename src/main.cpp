@@ -10,30 +10,72 @@
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<Vertex> vertices = {
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-        {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 1.0f}},
-        {{0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}},
-        {{0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 0.0f}},
-        {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 0.0f}}
+        // Front face
+        {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-left
+        {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-right
+        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-right
+        {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-left
+
+        // Back face
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
+        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
+        {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
+        {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
+
+        // Top face
+        {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Front-left
+        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Front-right
+        {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Back-right
+        {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Back-left
+
+        // Bottom face
+        {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Back-left
+        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
+        {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Front-right
+        {{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
+
+        // Right face
+        {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-front
+        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Top-front
+        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Top-back
+        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-back
+
+        // Left face
+        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
+        {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
+        {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
+        {{-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
 };
+
 
 const std::vector<uint16_t> indices = {
         // Front face
-        0, 1, 2, 2, 3, 0,
+        0, 1, 2,    // First triangle (bottom-left to top-right)
+        2, 3, 0,    // Second triangle (top-right to top-left)
+
         // Back face
-        4, 7, 6, 6, 5, 4,
-        // Left face
-        0, 3, 7, 7, 4, 0,
-        // Right face
-        1, 5, 6, 6, 2, 1,
+        5, 4, 7,
+        7, 6, 5,
+
         // Top face
-        3, 2, 6, 6, 7, 3,
+        8, 9, 10,
+        10, 11, 8,
+
         // Bottom face
-        0, 4, 5, 5, 1, 0
+        12, 13, 14,
+        14, 15, 12,
+
+        // Right face
+        17, 16, 19,
+        19, 18, 17,
+
+        // Left face
+        20, 21, 22,
+        22, 23, 20
 };
+
+
+
 
 const size_t light_aligned_size = 1280;
 
@@ -177,7 +219,7 @@ void copy_buffer(Init& init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSiz
 }
 
 int create_vertex_buffer(Init& init, RenderData& data) {
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
 
     // Create a staging buffer
     BufferAllocation stagingBuffer;
@@ -481,7 +523,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     bindingDescription.stride = sizeof(Vertex);
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+    std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
 
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
@@ -492,6 +534,11 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     attributeDescriptions[1].location = 1;
     attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+    attributeDescriptions[2].binding = 0;
+    attributeDescriptions[2].location = 2;
+    attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[2].offset = offsetof(Vertex, normal);
 
     VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
     vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -530,7 +577,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
