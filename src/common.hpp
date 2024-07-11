@@ -2,6 +2,8 @@
 
 #include "camera.hpp"
 
+class Texture;
+
 struct Init {
     GLFWwindow* window;
     vkb::Instance instance;
@@ -55,6 +57,7 @@ struct RenderData {
     std::vector<VkDescriptorSet> descriptor_sets;
 
     Camera camera;
+    std::unique_ptr<Texture> texture;
 
     struct {
         VkImage image;
@@ -69,6 +72,8 @@ struct RenderData {
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
+    glm::vec2 tex_coord;
+    glm::vec3 normal;
 };
 
 struct InstanceData {
