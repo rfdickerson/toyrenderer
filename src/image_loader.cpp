@@ -3,18 +3,39 @@
 //
 
 #include "image_loader.hpp"
+#include "common.hpp"
 
-Texture::Texture(Init &init, const std::string ktxfile): init(init) {
-    ktxVulkanDeviceInfo kvdi;
-    ktxTexture* kTexture;
-    KTX_error_code ktxresult;
+void ImageLoader::cleanup_texture(TextureImage &texture) {
+    vkDestroySampler(init.device, texture.sampler, nullptr);
+    vkDestroyImageView(init.device, texture.view, nullptr);
+    ktxVulkanTexture_Destruct(&texture.texture, init.device, nullptr);
+}
 
+ImageLoader::ImageLoader(Init &init): init(init) {
     ktxVulkanDeviceInfo_Construct(&kvdi,
                                   init.physical_device,
                                   init.device,
                                   init.graphics_queue,
                                   init.command_pool,
                                   nullptr);
+}
+
+ImageLoader::~ImageLoader() {
+
+    for (auto &texture : textures) {
+        cleanup_texture(texture);
+    }
+
+    ktxVulkanDeviceInfo_Destruct(&kvdi);
+}
+
+TextureImage ImageLoader::load_texture(const std::string ktxfile) {
+    ktxTexture* kTexture;
+    KTX_error_code ktxresult;
+
+    ktxVulkanTexture texture;
+    VkSampler sampler;
+    VkImageView view;
 
     ktxresult = ktxTexture_CreateFromNamedFile(ktxfile.c_str(),
                                                KTX_TEXTURE_CREATE_NO_FLAGS,
@@ -39,22 +60,22 @@ Texture::Texture(Init &init, const std::string ktxfile): init(init) {
     }
 
     VkSamplerCreateInfo samplerInfo{
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_LINEAR,
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .mipLodBias = 0.0f,
-        .anisotropyEnable = VK_TRUE,
-        .maxAnisotropy = 16,
-        .compareEnable = VK_FALSE,
-        .compareOp = VK_COMPARE_OP_ALWAYS,
-        .minLod = 0.0f,
-        .maxLod = static_cast<float>(kTexture->numLevels),
-        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-        .unnormalizedCoordinates = VK_FALSE,
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .mipLodBias = 0.0f,
+            .anisotropyEnable = VK_TRUE,
+            .maxAnisotropy = 16,
+            .compareEnable = VK_FALSE,
+            .compareOp = VK_COMPARE_OP_ALWAYS,
+            .minLod = 0.0f,
+            .maxLod = static_cast<float>(kTexture->numLevels),
+            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+            .unnormalizedCoordinates = VK_FALSE,
     };
 
     if (vkCreateSampler(init.device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
@@ -62,17 +83,18 @@ Texture::Texture(Init &init, const std::string ktxfile): init(init) {
     }
 
     VkImageViewCreateInfo viewInfo{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = texture.image,
-        .viewType = texture.viewType,
-        .format = texture.imageFormat,
-        .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = texture.levelCount,
-            .baseArrayLayer = 0,
-            .layerCount = texture.layerCount,
-        },
+
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = texture.image,
+            .viewType = texture.viewType,
+            .format = texture.imageFormat,
+            .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = texture.levelCount,
+                    .baseArrayLayer = 0,
+                    .layerCount = texture.layerCount,
+            },
     };
 
     if (vkCreateImageView(init.device, &viewInfo, nullptr, &view) != VK_SUCCESS) {
@@ -87,13 +109,14 @@ Texture::Texture(Init &init, const std::string ktxfile): init(init) {
     std::cout << "  " << "Mip Levels: " << texture.levelCount << std::endl;
     std::cout << "  " << "Array Layers: " << texture.layerCount << std::endl;
 
-    //ktxTexture_Destroy(kTexture);
-    ktxVulkanDeviceInfo_Destruct(&kvdi);
+    ktxTexture_Destroy(kTexture);
 
-}
+    TextureImage newTexture;
+    newTexture.texture = texture;
+    newTexture.sampler = sampler;
+    newTexture.view = view;
 
-Texture::~Texture() {
-    vkDestroySampler(init.device, sampler, nullptr);
-    vkDestroyImageView(init.device, view, nullptr);
-    ktxVulkanTexture_Destruct(&texture, init.device, nullptr);
+    textures.push_back(newTexture);
+
+    return newTexture;
 }

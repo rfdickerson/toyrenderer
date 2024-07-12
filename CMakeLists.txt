@@ -44,7 +44,9 @@ file(GLOB_RECURSE SRC_FILES
 
 add_executable(toyrenderer ${SRC_FILES}
         src/image_loader.cpp
-        src/image_loader.hpp)
+        src/image_loader.hpp
+        src/descriptors_manager.cpp
+        src/descriptors_manager.hpp)
 
 # Compile shaders
 file(GLOB_RECURSE SHADERS

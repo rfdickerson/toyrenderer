@@ -1,8 +1,7 @@
 #pragma once
 
 #include "camera.hpp"
-
-class Texture;
+#include "image_loader.hpp"
 
 struct Init {
     GLFWwindow* window;
@@ -57,7 +56,7 @@ struct RenderData {
     std::vector<VkDescriptorSet> descriptor_sets;
 
     Camera camera;
-    std::unique_ptr<Texture> texture;
+    TextureImage texture;
 
     struct {
         VkImage image;

@@ -1,25 +1,29 @@
-//
-// Created by rfdic on 7/10/2024.
-//
+#pragma once
 
-#ifndef TOYRENDERER_IMAGE_LOADER_HPP
-#define TOYRENDERER_IMAGE_LOADER_HPP
-
-#include "common.hpp"
 #include <ktxvulkan.h>
 
-class Texture {
-public:
-    Texture(Init &init, const std::string ktxfile);
-    ~Texture();
+struct Init;
 
-    Init& init;
+struct TextureImage {
     ktxVulkanTexture texture;
-
     VkSampler sampler;
     VkImageView view;
-
 };
 
+class ImageLoader {
+public:
+    explicit ImageLoader(Init& init);
+    ~ImageLoader();
 
-#endif //TOYRENDERER_IMAGE_LOADER_HPP
+    TextureImage load_texture(const std::string ktxfile);
+
+private:
+
+    void cleanup_texture(TextureImage& texture);
+
+    Init& init;
+    std::vector<TextureImage> textures;
+
+    ktxVulkanDeviceInfo kvdi;
+};
+

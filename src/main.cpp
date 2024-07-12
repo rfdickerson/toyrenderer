@@ -372,6 +372,7 @@ int device_initialization(Init& init) {
 int create_swapchain(Init& init) {
 
     vkb::SwapchainBuilder swapchain_builder{ init.device };
+
     auto swap_ret = swapchain_builder.set_old_swapchain(init.swapchain).build();
     if (!swap_ret) {
         std::cout << swap_ret.error().message() << " " << swap_ret.vk_result() << "\n";
@@ -580,7 +581,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -1091,8 +1092,8 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
         buffer_info.range = sizeof(UniformBufferObject);
 
         VkDescriptorImageInfo image_info = {
-            .sampler = renderData.texture->sampler,
-            .imageView = renderData.texture->view,
+            .sampler = renderData.texture.sampler,
+            .imageView = renderData.texture.view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
@@ -1150,14 +1151,15 @@ int main() {
     if (0 != create_descriptor_pool(init, render_data)) return -1;
     if (0 != create_imgui(init, render_data)) return -1;
     if (0 != create_uniform_buffers(init, render_data)) return -1;
-    render_data.texture = std::make_unique<Texture>(init, "../textures/wall.KTX2");
+    //render_data.texture = std::make_unique<Texture>(init, "../textures/wall.KTX2");
+    ImageLoader* imageLoader = new ImageLoader(init);
+    render_data.texture = imageLoader->load_texture("../textures/wall.KTX2");
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
     if (0 != create_vertex_buffer(init, render_data)) return -1;
     if (0 != create_index_buffer(init, render_data)) return -1;
 
     //auto texture = new Texture(init, "../textures/wall.KTX2");
-
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;
@@ -1192,7 +1194,7 @@ int main() {
     }
     init.disp.deviceWaitIdle();
 
-    render_data.texture.reset();
+    delete imageLoader;
 
     cleanup(init, render_data);
     return 0;
