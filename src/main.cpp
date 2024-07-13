@@ -1154,6 +1154,7 @@ int main() {
     //render_data.texture = std::make_unique<Texture>(init, "../textures/wall.KTX2");
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("../textures/wall.KTX2");
+    imageLoader->load_cubemap("../textures/pond.ktx2");
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
     if (0 != create_vertex_buffer(init, render_data)) return -1;

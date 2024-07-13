@@ -16,6 +16,7 @@ public:
     ~ImageLoader();
 
     TextureImage load_texture(const std::string ktxfile);
+    TextureImage load_cubemap(const std::string ktxfile);
 
 private:
 
