@@ -122,7 +122,7 @@ TextureImage ImageLoader::load_texture(const std::string ktxfile) {
 }
 
 TextureImage ImageLoader::load_cubemap(const std::string ktxfile) {
-    ktxTexture2* kTexture;
+    ktxTexture2 *kTexture;
     KTX_error_code ktxresult;
 
     ktxVulkanTexture texture;
@@ -130,8 +130,8 @@ TextureImage ImageLoader::load_cubemap(const std::string ktxfile) {
     VkImageView view;
 
     ktxresult = ktxTexture2_CreateFromNamedFile(ktxfile.c_str(),
-                                               KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-                                               &kTexture);
+                                                KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+                                                &kTexture);
 
     if (KTX_SUCCESS != ktxresult) {
         std::stringstream message;
@@ -149,10 +149,10 @@ TextureImage ImageLoader::load_cubemap(const std::string ktxfile) {
     }
 
     ktxresult = ktxTexture2_VkUploadEx(kTexture,
-                                      &kvdi, &texture,
-                                      VK_IMAGE_TILING_OPTIMAL,
-                                      VK_IMAGE_USAGE_SAMPLED_BIT,
-                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                                       &kvdi, &texture,
+                                       VK_IMAGE_TILING_OPTIMAL,
+                                       VK_IMAGE_USAGE_SAMPLED_BIT,
+                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     if (KTX_SUCCESS != ktxresult) {
         std::stringstream message;
@@ -200,5 +200,24 @@ TextureImage ImageLoader::load_cubemap(const std::string ktxfile) {
     if (vkCreateImageView(init.device, &viewInfo, nullptr, &view) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture image view!");
     }
+
+    // print a summary of the texture
+    std::cout << "Texture Summary:" << std::endl;
+    std::cout << "  " << ktxfile << std::endl;
+    std::cout << "  " << "Dimensions: " << texture.width << "x" << texture.height << "x" << texture.depth << std::endl;
+    std::cout << "  " << "Format: " << texture.imageFormat << std::endl;
+    std::cout << "  " << "Mip Levels: " << texture.levelCount << std::endl;
+    std::cout << "  " << "Array Layers: " << texture.layerCount << std::endl;
+
+    //ktxTexture2_Destroy(kTexture);
+
+    TextureImage newTexture;
+    newTexture.texture = texture;
+    newTexture.sampler = sampler;
+    newTexture.view = view;
+
+    textures.push_back(newTexture);
+
+    return newTexture;
 
 }

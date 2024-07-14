@@ -7,6 +7,7 @@
 
 #include "camera.hpp"
 #include "image_loader.hpp"
+#include "cube_map.hpp"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -404,21 +405,21 @@ int create_render_pass(Init& init, RenderData& data) {
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = init.swapchain.image_format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentDescription depthAttachment = {};
     depthAttachment.format = findDepthFormat(init);
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference color_attachment_ref = {};
@@ -460,44 +461,13 @@ int create_render_pass(Init& init, RenderData& data) {
     return 0;
 }
 
-std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
-    }
-
-    size_t file_size = (size_t)file.tellg();
-    std::vector<char> buffer(file_size);
-
-    file.seekg(0);
-    file.read(buffer.data(), static_cast<std::streamsize>(file_size));
-
-    file.close();
-
-    return buffer;
-}
-
-VkShaderModule createShaderModule(Init& init, const std::vector<char>& code) {
-    VkShaderModuleCreateInfo create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    create_info.codeSize = code.size();
-    create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-    VkShaderModule shaderModule;
-    if (init.disp.createShaderModule(&create_info, nullptr, &shaderModule) != VK_SUCCESS) {
-        return VK_NULL_HANDLE; // failed to create shader module
-    }
-
-    return shaderModule;
-}
 
 int create_graphics_pipeline(Init& init, RenderData& data) {
-    auto vert_code = readFile("shaders/simple.vert.spv");
-    auto frag_code = readFile("shaders/simple.frag.spv");
+    auto vert_code = read_file("shaders/simple.vert.spv");
+    auto frag_code = read_file("shaders/simple.frag.spv");
 
-    VkShaderModule vert_module = createShaderModule(init, vert_code);
-    VkShaderModule frag_module = createShaderModule(init, frag_code);
+    VkShaderModule vert_module = create_shader_module(init, vert_code);
+    VkShaderModule frag_module = create_shader_module(init, frag_code);
     if (vert_module == VK_NULL_HANDLE || frag_module == VK_NULL_HANDLE) {
         std::cout << "failed to create shader module\n";
         return -1; // failed to create shader modules
@@ -728,6 +698,51 @@ int create_command_buffers(Init& init, RenderData& data) {
     return 0;
 }
 
+int render_cubemap(Init& init, RenderData& data, uint32_t imageIndex) {
+
+    VkCommandBuffer commandBuffer = data.command_buffers[imageIndex];
+
+    std::array<VkClearValue, 2> clearValues = {};
+    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValues[1].depthStencil = {1.0f, 0};
+
+    VkRenderPassBeginInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = data.cube_map->render_pass;
+    renderPassInfo.framebuffer = data.framebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = init.swapchain.extent;
+    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassInfo.pClearValues = clearValues.data();
+
+
+    init.disp.cmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport = {};
+    viewport.width = static_cast<float>(init.swapchain.extent.width);
+    viewport.height = static_cast<float>(init.swapchain.extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor = {};
+    scissor.extent = init.swapchain.extent;
+
+
+    init.disp.cmdSetViewport(commandBuffer, 0, 1, &viewport);
+    init.disp.cmdSetScissor(commandBuffer, 0, 1, &scissor);
+    init.disp.cmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.cube_map->pipeline);
+
+
+    init.disp.cmdBindDescriptorSets(commandBuffer,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    data.cube_map->pipeline_layout, 0, 1,
+                                    &data.descriptor_sets[imageIndex], 0, nullptr);
+
+    init.disp.cmdDraw(commandBuffer, 36, 1, 0, 0);
+    init.disp.cmdEndRenderPass(commandBuffer);
+    return 0;
+}
+
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
@@ -742,9 +757,10 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
         return -1;
     }
 
-    std::array<VkClearValue, 2> clearValues = {};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
+    render_cubemap(init, data, imageIndex);
+
+    std::array<VkClearValue, 1> clearValues = {};
+    clearValues[0].depthStencil = {1.0f, 0};
 
     VkRenderPassBeginInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1056,7 +1072,20 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
             .pImmutableSamplers = nullptr,
     };
 
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {ubo_layout_binding, sampler_layout_binding};
+    // add cube map sampler binding
+    VkDescriptorSetLayoutBinding cubemap_sampler_layout_binding = {
+            .binding = 2,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers = nullptr,
+    };
+
+    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {
+            ubo_layout_binding,
+            sampler_layout_binding,
+            cubemap_sampler_layout_binding
+    };
 
     VkDescriptorSetLayoutCreateInfo layout_info = {};
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1097,7 +1126,13 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
-        std::array<VkWriteDescriptorSet, 2> descriptor_writes = {};
+        VkDescriptorImageInfo cubemap_image_info = {
+            .sampler = renderData.cube_map_texture.sampler,
+            .imageView = renderData.cube_map_texture.view,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+
+        std::array<VkWriteDescriptorSet, 3> descriptor_writes = {};
 
         descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_writes[0].dstSet = renderData.descriptor_sets[i];
@@ -1114,6 +1149,14 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
         descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptor_writes[1].descriptorCount = 1;
         descriptor_writes[1].pImageInfo = &image_info;
+
+        descriptor_writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_writes[2].dstSet = renderData.descriptor_sets[i];
+        descriptor_writes[2].dstBinding = 2;
+        descriptor_writes[2].dstArrayElement = 0;
+        descriptor_writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptor_writes[2].descriptorCount = 1;
+        descriptor_writes[2].pImageInfo = &cubemap_image_info;
 
         init.disp.updateDescriptorSets(descriptor_writes.size(), descriptor_writes.data(), 0, nullptr);
     }
@@ -1154,7 +1197,9 @@ int main() {
     //render_data.texture = std::make_unique<Texture>(init, "../textures/wall.KTX2");
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("../textures/wall.KTX2");
-    imageLoader->load_cubemap("../textures/pond.ktx2");
+    render_data.cube_map_texture = imageLoader->load_cubemap("../textures/pond.ktx2");
+
+    render_data.cube_map = new CubeMap(init, render_data);
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
     if (0 != create_vertex_buffer(init, render_data)) return -1;
@@ -1195,6 +1240,7 @@ int main() {
     }
     init.disp.deviceWaitIdle();
 
+    delete render_data.cube_map;
     delete imageLoader;
 
     cleanup(init, render_data);

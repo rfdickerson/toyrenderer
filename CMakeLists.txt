@@ -46,7 +46,9 @@ add_executable(toyrenderer ${SRC_FILES}
         src/image_loader.cpp
         src/image_loader.hpp
         src/descriptors_manager.cpp
-        src/descriptors_manager.hpp)
+        src/descriptors_manager.hpp
+        src/cube_map.cpp
+        src/cube_map.hpp)
 
 # Compile shaders
 file(GLOB_RECURSE SHADERS

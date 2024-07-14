@@ -3,6 +3,8 @@
 #include "camera.hpp"
 #include "image_loader.hpp"
 
+struct CubeMap;
+
 struct Init {
     GLFWwindow* window;
     vkb::Instance instance;
@@ -57,6 +59,8 @@ struct RenderData {
 
     Camera camera;
     TextureImage texture;
+    TextureImage cube_map_texture;
+    CubeMap *cube_map;
 
     struct {
         VkImage image;
