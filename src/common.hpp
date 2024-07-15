@@ -69,6 +69,9 @@ struct RenderData {
     } depth_image;
 
     VkImageView depth_image_view;
+    float lastX = 400;
+    float lastY = 300;
+    bool firstMouse = true;
 
 };
 

@@ -77,6 +77,23 @@ const std::vector<uint16_t> indices = {
         22, 23, 20
 };
 
+void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
+    auto data = static_cast<RenderData *>(glfwGetWindowUserPointer(window));
+
+    if (data->firstMouse) {
+        data->lastX = xpos;
+        data->lastY = ypos;
+        data->firstMouse = false;
+    }
+
+    float xoffset = xpos - data->lastX;
+    float yoffset = data->lastY - ypos; // reversed since y-coordinates go from bottom to top
+    data->lastX = xpos;
+    data->lastY = ypos;
+
+    data->camera.processMouseMovement(xoffset, yoffset);
+}
+
 VkFormat findSupportedFormat(Init& init, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
     for (VkFormat format : candidates) {
         VkFormatProperties props;
@@ -1205,10 +1222,12 @@ int main() {
     if (0 != create_vertex_buffer(init, render_data)) return -1;
     if (0 != create_index_buffer(init, render_data)) return -1;
 
-    //auto texture = new Texture(init, "../textures/wall.KTX2");
-
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;
+
+    glfwSetWindowUserPointer(init.window, &render_data);
+    glfwSetCursorPosCallback(init.window, mouse_callback);
+    glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     while (!glfwWindowShouldClose(init.window)) {
 
@@ -1217,6 +1236,11 @@ int main() {
         lastTime = currentTime;
 
         glfwPollEvents();
+
+        // check if escape key is pressed
+        if (glfwGetKey(init.window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(init.window, true);
+        }
 
         processInput(init.window, deltaTime, render_data.camera);
 

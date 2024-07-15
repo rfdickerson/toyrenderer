@@ -1,6 +1,7 @@
 #version 450
 
 layout(set = 0, binding = 0) uniform CameraUBO {
+    mat4 model;
     mat4 view;
     mat4 proj;
 } camera;
@@ -41,4 +42,5 @@ void main() {
     gl_Position = clipPos.xyww;
 
     outTexCoords = pos;
+    outTexCoords = vec3(pos.x, -pos.y, pos.z);
 }
