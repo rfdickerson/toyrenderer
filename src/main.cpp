@@ -9,6 +9,8 @@
 #include "image_loader.hpp"
 #include "cube_map.hpp"
 
+using namespace obsidian;
+
 const int WIDTH = 1280;
 const int HEIGHT = 720;
 

@@ -1,9 +1,0 @@
-[submodule "vk-bootstrap"]
-	path = extern/vk-bootstrap
-	url = https://github.com/charles-lunarg/vk-bootstrap
-[submodule "VulkanMemoryAllocator"]
-	path = extern/VulkanMemoryAllocator
-	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
-[submodule "extern/KTX-Software"]
-	path = extern/KTX-Software
-	url = https://github.com/KhronosGroup/KTX-Software
