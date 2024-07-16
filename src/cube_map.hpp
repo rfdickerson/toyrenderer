@@ -1,12 +1,7 @@
-//
-// Created by rfdic on 7/13/2024.
-//
+#pragma once
 
-#ifndef TOYRENDERER_CUBE_MAP_HPP
-#define TOYRENDERER_CUBE_MAP_HPP
-
-class Init;
-class RenderData;
+struct Init;
+struct RenderData;
 
 class CubeMap {
 public:
@@ -21,10 +16,8 @@ public:
 
     VkRenderPass render_pass;
 
-    VkResult create_render_pass();
-    VkResult create_pipeline();
-    VkResult create_pipeline_layout();
+    VkResult createRenderPass();
+    VkResult createPipeline();
+    VkResult createPipelineLayout();
 };
 
-
-#endif //TOYRENDERER_CUBE_MAP_HPP

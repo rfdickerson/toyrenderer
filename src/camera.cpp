@@ -4,18 +4,20 @@
 
 #include "camera.hpp"
 
+using namespace obsidian;
+
 Camera::Camera(
     glm::vec3 pos,
     glm::vec3 up,
     float yaw,
     float pitch)
 : position(pos), front(glm::vec3(0.0f, 0.0f, -1.0f)), up(up),
-yaw(yaw), pitch(pitch), fov(45.0f), aspectRatio(1.0f),
+yaw(yaw), pitch(pitch), fov(45.0f), aspectRatio(16.0/9.0f),
 nearPlane(0.1f), farPlane(100.0f) {
-    updateCameraVectors();
+	update_camera_vectors();
 };
 
-void Camera::updateCameraVectors() {
+void Camera::update_camera_vectors() {
     glm::vec3 newFront;
     newFront.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
     newFront.y = sin(glm::radians(pitch));
@@ -31,7 +33,7 @@ glm::mat4 Camera::getProjectionMatrix() const {
     return glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
 }
 
-void Camera::processKeyboard(CameraMovement direction, float deltaTime) {
+void Camera::process_keyboard(CameraMovement direction, float deltaTime) {
     float velocity = 2.5f * deltaTime;
     if (direction == FORWARD) {
         position += front * velocity;
@@ -47,7 +49,7 @@ void Camera::processKeyboard(CameraMovement direction, float deltaTime) {
     }
 }
 
-void Camera::processMouseMovement(float xoffset, float yoffset, bool constrainPitch) {
+void Camera::process_mouse_movement(float xoffset, float yoffset, bool constrainPitch) {
     xoffset *= 0.1f;
     yoffset *= 0.1f;
 
@@ -63,10 +65,10 @@ void Camera::processMouseMovement(float xoffset, float yoffset, bool constrainPi
         }
     }
 
-    updateCameraVectors();
+	update_camera_vectors();
 }
 
-void Camera::processMouseScroll(float yoffset) {
+void Camera::process_mouse_scroll(float yoffset) {
     fov -= yoffset;
     if (fov < 1.0f) {
         fov = 1.0f;

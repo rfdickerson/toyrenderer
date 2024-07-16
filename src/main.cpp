@@ -9,6 +9,9 @@
 #include "image_loader.hpp"
 #include "cube_map.hpp"
 
+const int WIDTH = 1280;
+const int HEIGHT = 720;
+
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<Vertex> vertices = {
@@ -91,7 +94,7 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
     data->lastX = xpos;
     data->lastY = ypos;
 
-    data->camera.processMouseMovement(xoffset, yoffset);
+	data->camera.process_mouse_movement(xoffset, yoffset);
 }
 
 VkFormat findSupportedFormat(Init& init, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
@@ -118,7 +121,7 @@ VkFormat findDepthFormat(Init& init) {
     );
 }
 
-int createDepthResources(Init& init, RenderData& data) {
+int create_depth_resources(Init& init, RenderData& data) {
     VkFormat depthFormat = findDepthFormat(init);
 
     VkImageCreateInfo imageInfo{};
@@ -284,7 +287,7 @@ GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     if (!resize) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    return glfwCreateWindow(1024, 1024, window_name, nullptr, nullptr);
+    return glfwCreateWindow(WIDTH, HEIGHT, window_name, nullptr, nullptr);
 }
 
 void destroy_window_glfw(GLFWwindow* window) {
@@ -331,7 +334,13 @@ int device_initialization(Init& init) {
 
     init.surface = create_surface_glfw(init.instance, init.window);
 
+    VkPhysicalDeviceFeatures required_features = {};
+    required_features.samplerAnisotropy = VK_TRUE;
+
     vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
+
+    phys_device_selector.set_required_features(required_features);
+
     auto phys_device_ret = phys_device_selector.set_surface(init.surface).select();
     if (!phys_device_ret) {
         std::cout << phys_device_ret.error().message() << "\n";
@@ -339,11 +348,6 @@ int device_initialization(Init& init) {
     }
     vkb::PhysicalDevice physical_device = phys_device_ret.value();
     init.physical_device = physical_device;
-
-    VkPhysicalDeviceFeatures deviceFeatures{};
-    deviceFeatures.samplerAnisotropy = VK_TRUE;
-
-    physical_device.enable_features_if_present(deviceFeatures);
 
     vkb::DeviceBuilder device_builder{ physical_device };
     auto device_ret = device_builder.build();
@@ -401,22 +405,22 @@ int create_swapchain(Init& init) {
     return 0;
 }
 
-int get_queues(Init& init, RenderData& data) {
-    auto gq = init.device.get_queue(vkb::QueueType::graphics);
-    if (!gq.has_value()) {
-        std::cout << "failed to get graphics queue: " << gq.error().message() << "\n";
-        return -1;
-    }
-    data.graphics_queue = gq.value();
-
-    auto pq = init.device.get_queue(vkb::QueueType::present);
-    if (!pq.has_value()) {
-        std::cout << "failed to get present queue: " << pq.error().message() << "\n";
-        return -1;
-    }
-    data.present_queue = pq.value();
-    return 0;
-}
+//int get_queues(Init& init, RenderData& data) {
+//    auto gq = init.device.get_queue(vkb::QueueType::graphics);
+//    if (!gq.has_value()) {
+//        std::cout << "failed to get graphics queue: " << gq.error().message() << "\n";
+//        return -1;
+//    }
+//    data.graphics_queue = gq.value();
+//
+//    auto pq = init.device.get_queue(vkb::QueueType::present);
+//    if (!pq.has_value()) {
+//        std::cout << "failed to get present queue: " << pq.error().message() << "\n";
+//        return -1;
+//    }
+//    data.present_queue = pq.value();
+//    return 0;
+//}
 
 int create_render_pass(Init& init, RenderData& data) {
     VkAttachmentDescription color_attachment = {};
@@ -689,7 +693,7 @@ int create_command_pool(Init& init, RenderData& data) {
     VkCommandPoolCreateInfo main_pool_info = {};
     main_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     main_pool_info.queueFamilyIndex = init.device.get_queue_index(vkb::QueueType::graphics).value();
-    main_pool_info.flags = 0;
+    main_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     if (init.disp.createCommandPool(&main_pool_info, nullptr, &init.command_pool) != VK_SUCCESS) {
         std::cout << "failed to create main command pool\n";
@@ -916,7 +920,7 @@ int draw_frame(Init& init, RenderData& data) {
 
     init.disp.resetFences(1, &data.in_flight_fences[data.current_frame]);
 
-    if (init.disp.queueSubmit(data.graphics_queue, 1, &submitInfo, data.in_flight_fences[data.current_frame]) != VK_SUCCESS) {
+    if (init.disp.queueSubmit(init.graphics_queue, 1, &submitInfo, data.in_flight_fences[data.current_frame]) != VK_SUCCESS) {
         std::cout << "failed to submit draw command buffer\n";
         return -1; //"failed to submit draw command buffer
     }
@@ -933,7 +937,7 @@ int draw_frame(Init& init, RenderData& data) {
 
     present_info.pImageIndices = &image_index;
 
-    result = init.disp.queuePresentKHR(data.present_queue, &present_info);
+    result = init.disp.queuePresentKHR(init.graphics_queue, &present_info);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         return recreate_swapchain(init, data);
     } else if (result != VK_SUCCESS) {
@@ -1013,7 +1017,7 @@ int create_imgui(Init& init, RenderData& data) {
     init_info.PhysicalDevice = init.physical_device.physical_device;
     init_info.Device = init.device.device;
     init_info.QueueFamily = init.device.get_queue_index(vkb::QueueType::graphics).value();
-    init_info.Queue = data.graphics_queue;
+    init_info.Queue = init.graphics_queue;
     init_info.PipelineCache = VK_NULL_HANDLE;
     init_info.DescriptorPool = data.descriptor_pool;
     init_info.Allocator = nullptr;
@@ -1061,15 +1065,15 @@ int create_descriptor_pool(Init& init, RenderData& data) {
 
 
 
-void processInput(GLFWwindow* window, float deltaTime, Camera& camera) {
+void processInput(GLFWwindow* window, float deltaTime, obsidian::Camera& camera) {
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.processKeyboard(FORWARD, deltaTime);
+		camera.process_keyboard(obsidian::FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.processKeyboard(BACKWARD, deltaTime);
+		camera.process_keyboard(obsidian::BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.processKeyboard(LEFT, deltaTime);
+		camera.process_keyboard(obsidian::LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.processKeyboard(RIGHT, deltaTime);
+		camera.process_keyboard(obsidian::RIGHT, deltaTime);
 }
 
 int create_descriptor_set_layout(Init& init, RenderData& renderData) {
@@ -1193,16 +1197,39 @@ int create_uniform_buffers(Init& init, RenderData& renderData) {
     return 0;
 }
 
+int create_new_imgui_frame(Init& init, RenderData& render_data) {
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImGui::Begin("Obsidian Engine");
+	ImGui::Text("This is some useful text.");
+	// show camera coordinates
+	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
+	ImGui::End();
+
+	int res = draw_frame(init, render_data);
+	if (res != 0) {
+		std::cout << "failed to draw frame \n";
+		return -1;
+	}
+}
+
+void configure_mouse_input(const Init& init, RenderData& render_data) {
+	glfwSetWindowUserPointer(init.window, &render_data);
+	glfwSetCursorPosCallback(init.window, mouse_callback);
+	glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+}
+
 int main() {
     Init init;
     RenderData render_data;
 
     if (0 != device_initialization(init)) return -1;
     if (0 != create_swapchain(init)) return -1;
-    if (0 != get_queues(init, render_data)) return -1;
     if (0 != create_render_pass(init, render_data)) return -1;
     if (0 != create_descriptor_set_layout(init, render_data)) return -1;
-    if (0 != createDepthResources(init, render_data)) return -1;
+    if (0 != create_depth_resources(init, render_data)) return -1;
     if (0 != create_graphics_pipeline(init, render_data)) return -1;
     if (0 != create_framebuffers(init, render_data)) return -1;
     if (0 != create_command_pool(init, render_data)) return -1;
@@ -1214,8 +1241,7 @@ int main() {
     //render_data.texture = std::make_unique<Texture>(init, "../textures/wall.KTX2");
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("../textures/wall.KTX2");
-    render_data.cube_map_texture = imageLoader->load_cubemap("../textures/pond.ktx2");
-
+    render_data.cube_map_texture = imageLoader->load_cubemap("../textures/clouds.ktx2");
     render_data.cube_map = new CubeMap(init, render_data);
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
@@ -1225,9 +1251,7 @@ int main() {
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;
 
-    glfwSetWindowUserPointer(init.window, &render_data);
-    glfwSetCursorPosCallback(init.window, mouse_callback);
-    glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	configure_mouse_input(init, render_data);
 
     while (!glfwWindowShouldClose(init.window)) {
 
@@ -1244,22 +1268,7 @@ int main() {
 
         processInput(init.window, deltaTime, render_data.camera);
 
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        //ImGui::ShowDemoWindow();
-        ImGui::Begin("Hello, world!");
-        ImGui::Text("This is some useful text.");
-        // show camera coordinates
-        ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
-        ImGui::End();
-
-        int res = draw_frame(init, render_data);
-        if (res != 0) {
-            std::cout << "failed to draw frame \n";
-            return -1;
-        }
-
+		create_new_imgui_frame(init, render_data);
 
     }
     init.disp.deviceWaitIdle();

@@ -8,9 +8,9 @@
 #include "utils.hpp"
 
 CubeMap::CubeMap(Init &init, RenderData& renderData) : init(init), renderData(renderData) {
-    create_render_pass();
-    create_pipeline();
-    create_pipeline_layout();
+	createRenderPass();
+	createPipeline();
+	createPipelineLayout();
 }
 
 CubeMap::~CubeMap() {
@@ -19,7 +19,7 @@ CubeMap::~CubeMap() {
     vkDestroyRenderPass(init.device, render_pass, nullptr);
 }
 
-VkResult CubeMap::create_pipeline_layout() {
+VkResult CubeMap::createPipelineLayout() {
 
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
@@ -32,7 +32,7 @@ VkResult CubeMap::create_pipeline_layout() {
     return vkCreatePipelineLayout(init.device, &pipeline_layout_info, nullptr, &pipeline_layout);
 }
 
-VkResult CubeMap::create_render_pass() {
+VkResult CubeMap::createRenderPass() {
 
     std::array<VkAttachmentDescription, 2> attachments = {};
 
@@ -88,7 +88,7 @@ VkResult CubeMap::create_render_pass() {
     return vkCreateRenderPass(init.device, &render_pass_info, nullptr, &render_pass);
 }
 
-VkResult CubeMap::create_pipeline() {
+VkResult CubeMap::createPipeline() {
 
     auto vert_shader_code = read_file("shaders/cubemap.vert.spv");
 
@@ -203,6 +203,9 @@ VkResult CubeMap::create_pipeline() {
     if (vkCreateGraphicsPipelines(init.device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline) != VK_SUCCESS) {
         return VK_ERROR_INITIALIZATION_FAILED;
     }
+
+    vkDestroyShaderModule(init.device, vert_shader_module, nullptr);
+    vkDestroyShaderModule(init.device, frag_shader_stage_info.module, nullptr);
 
 
     return VK_SUCCESS;

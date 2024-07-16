@@ -1,14 +1,18 @@
 cmake_minimum_required(VERSION 3.28)
 project(toyrenderer)
 
-add_subdirectory(extern/vk-bootstrap)
-add_subdirectory(extern/VulkanMemoryAllocator)
-add_subdirectory(extern/KTX-Software)
+#add_subdirectory(extern/vk-bootstrap)
+#add_subdirectory(extern/VulkanMemoryAllocator)
+#add_subdirectory(extern/KTX-Software)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(glfw3 3.3 REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(Ktx CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+find_package(vk-bootstrap CONFIG REQUIRED)
 
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -72,9 +76,11 @@ target_link_libraries(toyrenderer
         PRIVATE
         glfw
         vk-bootstrap::vk-bootstrap
+        vk-bootstrap::vk-bootstrap-compiler-warnings
         Vulkan::Vulkan
         GPUOpen::VulkanMemoryAllocator
-        ktx
+        KTX::ktx
+        imgui::imgui
 )
 
 # Update the path for the precompiled header

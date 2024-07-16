@@ -3,7 +3,7 @@
 #include "camera.hpp"
 #include "image_loader.hpp"
 
-struct CubeMap;
+class CubeMap;
 
 struct Init {
     GLFWwindow* window;
@@ -16,7 +16,6 @@ struct Init {
     vkb::Swapchain swapchain;
     VmaAllocator allocator;
     VkQueue graphics_queue;
-    VkQueue present_queue;
     VkCommandPool command_pool;
 };
 
@@ -27,8 +26,8 @@ struct BufferAllocation {
 };
 
 struct RenderData {
-    VkQueue graphics_queue;
-    VkQueue present_queue;
+//    VkQueue graphics_queue;
+//    VkQueue present_queue;
 
     std::vector<VkImage> swapchain_images;
     std::vector<VkImageView> swapchain_image_views;
@@ -57,7 +56,7 @@ struct RenderData {
     VkDescriptorSetLayout descriptor_set_layout;
     std::vector<VkDescriptorSet> descriptor_sets;
 
-    Camera camera;
+    obsidian::Camera camera;
     TextureImage texture;
     TextureImage cube_map_texture;
     CubeMap *cube_map;
