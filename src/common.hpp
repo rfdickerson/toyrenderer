@@ -66,6 +66,7 @@ struct RenderData
 	TextureImage     cube_map_texture;
 	CubeMap         *cube_map;
 	Mesh 		   	*mesh;
+	Mesh 		   	*plane_mesh;
 
 	struct
 	{

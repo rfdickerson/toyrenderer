@@ -88,6 +88,59 @@ Mesh* Mesh::create_cube()
 	return mesh;
 }
 
+Mesh* Mesh::create_plane(uint32_t subdivisions, float size)
+{
+	// Calculate the number of vertices and indices
+	uint32_t numVertices = (subdivisions + 1) * (subdivisions + 1);
+	uint32_t numIndices = subdivisions * subdivisions * 6;
+
+	// Generate the vertices
+	std::vector<Vertex> vertices(numVertices);
+	for (uint32_t y = 0; y <= subdivisions; y++) {
+		for (uint32_t x = 0; x <= subdivisions; x++) {
+			float u = static_cast<float>(x) / subdivisions;
+			float v = static_cast<float>(y) / subdivisions;
+			vertices[y * (subdivisions + 1) + x] = {
+			    {-size / 2.0f + u * size, 0.0f, -size / 2.0f + v * size},
+			    {1.0f, 1.0f, 1.0f},
+			    {u, v},
+			    {0.0f, 1.0f, 0.0f}
+			};
+		}
+	}
+
+	// Generate the indices
+	std::vector<uint16_t> indices(numIndices);
+	for (uint32_t y = 0; y < subdivisions; y++) {
+		for (uint32_t x = 0; x < subdivisions; x++) {
+			uint16_t topLeft = y * (subdivisions + 1) + x;
+			uint16_t topRight = topLeft + 1;
+			uint16_t bottomLeft = (y + 1) * (subdivisions + 1) + x;
+			uint16_t bottomRight = bottomLeft + 1;
+
+			uint32_t indexOffset = (y * subdivisions + x) * 6;
+			indices[indexOffset + 0] = topLeft;
+			indices[indexOffset + 1] = bottomLeft;
+			indices[indexOffset + 2] = topRight;
+			indices[indexOffset + 3] = topRight;
+			indices[indexOffset + 4] = bottomLeft;
+			indices[indexOffset + 5] = bottomRight;
+		}
+	}
+
+	// Create the mesh
+	Mesh* mesh = new Mesh();
+	mesh->mesh_type = MeshType::PLANE;
+	mesh->vertex_count = numVertices;
+	mesh->index_count = numIndices;
+	mesh->vertices = vertices;
+	mesh->indices = indices;
+
+	return mesh;
+}
+
+
+
 VkResult Mesh::transfer_mesh(Init &init)
 {
 	VkDeviceSize vertex_buffer_size = sizeof(vertices[0]) * vertices.size();

@@ -736,7 +736,6 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
 
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -751,9 +750,8 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
     scissor.extent = init.swapchain.extent;
     init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
 
-    //init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-	// call draw function of cube here
 	data.mesh->draw(init, data.command_buffers[imageIndex]);
+	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
 
     // Render ImGui
     ImGui::Render();
@@ -1179,6 +1177,8 @@ int main() {
     if (0 != create_descriptor_sets(init, render_data)) return -1;
 	render_data.mesh = Mesh::create_cube();
 	render_data.mesh->transfer_mesh(init);
+	render_data.plane_mesh = Mesh::create_plane(10, 20);
+	render_data.plane_mesh->transfer_mesh(init);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;

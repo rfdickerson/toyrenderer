@@ -1,7 +1,3 @@
-//
-// Created by rfdic on 7/15/2024.
-//
-
 #ifndef TOYRENDERER_MESH_HPP
 #define TOYRENDERER_MESH_HPP
 
@@ -34,6 +30,8 @@ struct Mesh
 	VkResult transfer_mesh(Init &init);
 
 	static Mesh* create_cube();
+	static Mesh* create_plane(uint32_t subdivisions, float size = 1.0f);
+
 	VkResult draw(Init& init, VkCommandBuffer commandBuffer);
 };
 
