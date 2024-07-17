@@ -8,6 +8,7 @@
 #include "camera.hpp"
 #include "image_loader.hpp"
 #include "cube_map.hpp"
+#include "mesh.hpp"
 
 using namespace obsidian;
 
@@ -16,71 +17,6 @@ const int HEIGHT = 720;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-const std::vector<Vertex> vertices = {
-        // Front face
-        {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-left
-        {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-right
-        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-right
-        {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-left
-
-        // Back face
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
-        {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
-        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
-        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
-
-        // Top face
-        {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-left
-        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-right
-        {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-right
-        {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-left
-
-        // Bottom face
-        {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-left
-        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
-        {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-right
-        {{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
-
-        // Right face
-        {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-front
-        {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Top-front
-        {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Top-back
-        {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-back
-
-        // Left face
-        {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
-        {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
-        {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
-        {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
-};
-
-
-
-const std::vector<uint16_t> indices = {
-        // Front face
-        0, 1, 2,    // First triangle (bottom-left to top-right)
-        2, 3, 0,    // Second triangle (top-right to top-left)
-
-        // Back face
-        5, 4, 7,
-        7, 6, 5,
-
-        // Top face
-        8, 9, 10,
-        10, 11, 8,
-
-        // Bottom face
-        12, 13, 14,
-        14, 15, 12,
-
-        // Right face
-        17, 16, 19,
-        19, 18, 17,
-
-        // Left face
-        20, 21, 22,
-        22, 23, 20
-};
 
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
     auto data = static_cast<RenderData *>(glfwGetWindowUserPointer(window));
@@ -220,55 +156,55 @@ void copy_buffer(Init& init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSiz
     init.disp.freeCommandBuffers(init.command_pool, 1, &commandBuffer);
 }
 
-int create_vertex_buffer(Init& init, RenderData& data) {
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-
-    // Create a staging buffer
-    BufferAllocation stagingBuffer;
-    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
-
-    // Map the staging buffer and copy the vertex data to it
-    void* mappedData;
-    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
-    memcpy(mappedData, vertices.data(), bufferSize);
-    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
-
-    // Create the vertex buffer
-    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.vertex_buffer);
-
-    // Copy the data from the staging buffer to the vertex buffer
-    copy_buffer(init, stagingBuffer.buffer, data.vertex_buffer.buffer, bufferSize);
-
-    // Clean up the staging buffer
-    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
-
-    return 0;
-}
-
-int create_index_buffer(Init& init, RenderData& data) {
-    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-    // Create a staging buffer
-    BufferAllocation stagingBuffer;
-    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
-
-    // Map the staging buffer and copy the index data to it
-    void* mappedData;
-    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
-    memcpy(mappedData, indices.data(), bufferSize);
-    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
-
-    // Create the index buffer
-    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.index_buffer);
-
-    // Copy the data from the staging buffer to the index buffer
-    copy_buffer(init, stagingBuffer.buffer, data.index_buffer.buffer, bufferSize);
-
-    // Clean up the staging buffer
-    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
-
-    return 0;
-}
+//int create_vertex_buffer(Init& init, RenderData& data) {
+//    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+//
+//    // Create a staging buffer
+//    BufferAllocation stagingBuffer;
+//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
+//
+//    // Map the staging buffer and copy the vertex data to it
+//    void* mappedData;
+//    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
+//    memcpy(mappedData, vertices.data(), bufferSize);
+//    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
+//
+//    // Create the vertex buffer
+//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.vertex_buffer);
+//
+//    // Copy the data from the staging buffer to the vertex buffer
+//    copy_buffer(init, stagingBuffer.buffer, data.vertex_buffer.buffer, bufferSize);
+//
+//    // Clean up the staging buffer
+//    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
+//
+//    return 0;
+//}
+//
+//int create_index_buffer(Init& init, RenderData& data) {
+//    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+//
+//    // Create a staging buffer
+//    BufferAllocation stagingBuffer;
+//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
+//
+//    // Map the staging buffer and copy the index data to it
+//    void* mappedData;
+//    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
+//    memcpy(mappedData, indices.data(), bufferSize);
+//    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
+//
+//    // Create the index buffer
+//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.index_buffer);
+//
+//    // Copy the data from the staging buffer to the index buffer
+//    copy_buffer(init, stagingBuffer.buffer, data.index_buffer.buffer, bufferSize);
+//
+//    // Clean up the staging buffer
+//    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
+//
+//    return 0;
+//}
 
 
 void updateUniformBuffer(uint32_t current, Init &init, RenderData& renderData) {
@@ -797,11 +733,6 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
     init.disp.cmdBeginRenderPass(data.command_buffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-    VkBuffer vertexBuffers[] = {data.vertex_buffer.buffer};
-    VkDeviceSize offsets[] = {0};
-    init.disp.cmdBindVertexBuffers(data.command_buffers[imageIndex], 0, 1, vertexBuffers, offsets);
-
-    init.disp.cmdBindIndexBuffer(data.command_buffers[imageIndex], data.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
 
     init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
 
@@ -820,7 +751,9 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
     scissor.extent = init.swapchain.extent;
     init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
 
-    init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+    //init.disp.cmdDrawIndexed(data.command_buffers[imageIndex], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+	// call draw function of cube here
+	data.mesh->draw(init, data.command_buffers[imageIndex]);
 
     // Render ImGui
     ImGui::Render();
@@ -964,9 +897,6 @@ void cleanup(Init& init, RenderData& data) {
         vmaDestroyBuffer(init.allocator, data.uniform_buffers[i].buffer, data.uniform_buffers[i].allocation);
     }
 
-    vmaDestroyBuffer(init.allocator, data.vertex_buffer.buffer, data.vertex_buffer.allocation);
-    vmaDestroyBuffer(init.allocator, data.index_buffer.buffer, data.index_buffer.allocation);
-
     // Cleanup ImGui
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -1067,15 +997,15 @@ int create_descriptor_pool(Init& init, RenderData& data) {
 
 
 
-void processInput(GLFWwindow* window, float deltaTime, obsidian::Camera& camera) {
+void processInput(GLFWwindow* window, float deltaTime, Camera& camera) {
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		camera.process_keyboard(obsidian::FORWARD, deltaTime);
+		camera.process_keyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		camera.process_keyboard(obsidian::BACKWARD, deltaTime);
+		camera.process_keyboard(BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		camera.process_keyboard(obsidian::LEFT, deltaTime);
+		camera.process_keyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camera.process_keyboard(obsidian::RIGHT, deltaTime);
+		camera.process_keyboard(RIGHT, deltaTime);
 }
 
 int create_descriptor_set_layout(Init& init, RenderData& renderData) {
@@ -1247,8 +1177,8 @@ int main() {
     render_data.cube_map = new CubeMap(init, render_data);
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
-    if (0 != create_vertex_buffer(init, render_data)) return -1;
-    if (0 != create_index_buffer(init, render_data)) return -1;
+	render_data.mesh = Mesh::create_cube();
+	render_data.mesh->transfer_mesh(init);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;

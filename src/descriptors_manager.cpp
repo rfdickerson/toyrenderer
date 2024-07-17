@@ -3,3 +3,5 @@
 //
 
 #include "descriptors_manager.hpp"
+
+using namespace obsidian;

@@ -7,6 +7,8 @@
 #include "common.hpp"
 #include "utils.hpp"
 
+using namespace obsidian;
+
 CubeMap::CubeMap(Init &init, RenderData& renderData) : init(init), renderData(renderData) {
 	createRenderPass();
 	createPipeline();

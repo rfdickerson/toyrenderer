@@ -7,10 +7,15 @@
 
 #include "common.hpp"
 
-class DescriptorsManager {
-public:
-    DescriptorsManager(Init& init);
+namespace obsidian
+{
+
+class DescriptorsManager
+{
+  public:
+	DescriptorsManager(Init &init);
 };
 
+} // namespace obsidian
 
 #endif //TOYRENDERER_DESCRIPTORS_MANAGER_HPP

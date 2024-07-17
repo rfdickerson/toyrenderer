@@ -5,6 +5,8 @@
 #include "image_loader.hpp"
 #include "common.hpp"
 
+using namespace obsidian;
+
 void ImageLoader::cleanup_texture(TextureImage &texture) {
     vkDestroySampler(init.device, texture.sampler, nullptr);
     vkDestroyImageView(init.device, texture.view, nullptr);
