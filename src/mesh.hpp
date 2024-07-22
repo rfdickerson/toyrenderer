@@ -35,6 +35,13 @@ struct Mesh
 	VkResult draw(Init& init, VkCommandBuffer commandBuffer);
 };
 
+void create_cube_mesh(Init &init, Mesh& mesh);
+void create_plane_mesh(Init &init, Mesh& mesh, uint32_t subdivisions, float size);
+VkResult cleanup_mesh(Init &init, Mesh& mesh);
+
+VkResult transfer_mesh(Init &init, Mesh &mesh);
+
+
 }        // namespace obsidian
 
 #endif        // TOYRENDERER_MESH_HPP
