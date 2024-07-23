@@ -35,32 +35,10 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
 	data->camera.process_mouse_movement(xoffset, yoffset);
 }
 
-VkFormat findSupportedFormat(Init& init, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
-    for (VkFormat format : candidates) {
-        VkFormatProperties props;
-
-        //init.disp.getPhysicalDeviceFormatProperties(init.physical_device.physical_device, format, &props);
-        init.inst_disp.getPhysicalDeviceFormatProperties(init.physical_device.physical_device, format, &props);
-
-        if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
-            return format;
-        } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
-            return format;
-        }
-    }
-    throw std::runtime_error("failed to find supported format!");
-}
-
-VkFormat findDepthFormat(Init& init) {
-    return findSupportedFormat(init,
-                               {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-                               VK_IMAGE_TILING_OPTIMAL,
-                               VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-    );
-}
 
 int create_depth_resources(Init& init, RenderData& data) {
-    VkFormat depthFormat = findDepthFormat(init);
+    //VkFormat depthFormat = findDepthFormat(init);
+	const auto depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
 
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -156,68 +134,22 @@ void copy_buffer(Init& init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSiz
     init.disp.freeCommandBuffers(init.command_pool, 1, &commandBuffer);
 }
 
-//int create_vertex_buffer(Init& init, RenderData& data) {
-//    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-//
-//    // Create a staging buffer
-//    BufferAllocation stagingBuffer;
-//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
-//
-//    // Map the staging buffer and copy the vertex data to it
-//    void* mappedData;
-//    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
-//    memcpy(mappedData, vertices.data(), bufferSize);
-//    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
-//
-//    // Create the vertex buffer
-//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.vertex_buffer);
-//
-//    // Copy the data from the staging buffer to the vertex buffer
-//    copy_buffer(init, stagingBuffer.buffer, data.vertex_buffer.buffer, bufferSize);
-//
-//    // Clean up the staging buffer
-//    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
-//
-//    return 0;
-//}
-//
-//int create_index_buffer(Init& init, RenderData& data) {
-//    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-//
-//    // Create a staging buffer
-//    BufferAllocation stagingBuffer;
-//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, stagingBuffer);
-//
-//    // Map the staging buffer and copy the index data to it
-//    void* mappedData;
-//    vmaMapMemory(init.allocator, stagingBuffer.allocation, &mappedData);
-//    memcpy(mappedData, indices.data(), bufferSize);
-//    vmaUnmapMemory(init.allocator, stagingBuffer.allocation);
-//
-//    // Create the index buffer
-//    create_buffer(init, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, data.index_buffer);
-//
-//    // Copy the data from the staging buffer to the index buffer
-//    copy_buffer(init, stagingBuffer.buffer, data.index_buffer.buffer, bufferSize);
-//
-//    // Clean up the staging buffer
-//    vmaDestroyBuffer(init.allocator, stagingBuffer.buffer, stagingBuffer.allocation);
-//
-//    return 0;
-//}
+void copy_buffer_data(Init& init, BufferAllocation buffer, VkDeviceSize size, void* data) {
+	void *mapped_data;
+	vmaMapMemory(init.allocator, buffer.allocation, &mapped_data);
+	memcpy(mapped_data, data, size);
+	vmaUnmapMemory(init.allocator, buffer.allocation);
+}
 
+void update_uniform_buffer(uint32_t current, Init &init, RenderData& renderData) {
 
-void updateUniformBuffer(uint32_t current, Init &init, RenderData& renderData) {
-    UniformBufferObject ubo = {};
-    ubo.model = glm::mat4(1.0f);
-    ubo.view = renderData.camera.getViewMatrix();
-    ubo.proj = renderData.camera.getProjectionMatrix();
+	UniformBufferObject ubo {
+		.model = glm::mat4(1.0f),
+		.view = renderData.camera.getViewMatrix(),
+		.proj = renderData.camera.getProjectionMatrix()
+	};
 
-    void* data;
-    vmaMapMemory(init.allocator, renderData.uniform_buffers[current].allocation, &data);
-    memcpy(data, &ubo, sizeof(ubo));
-    vmaUnmapMemory(init.allocator, renderData.uniform_buffers[current].allocation);
-
+	copy_buffer_data(init, renderData.uniform_buffers[current], sizeof(ubo), &ubo);
 }
 
 GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true) {
@@ -258,6 +190,7 @@ int device_initialization(Init& init) {
     auto instance_ret = instance_builder
             .set_app_name("Vulkan Triangle")
             .set_engine_name("AwesomeEngine")
+			.require_api_version(1, 3, 0)
             .request_validation_layers()
             .use_default_debug_messenger()
             .build();
@@ -274,10 +207,17 @@ int device_initialization(Init& init) {
 
     VkPhysicalDeviceFeatures required_features = {};
     required_features.samplerAnisotropy = VK_TRUE;
+	required_features.textureCompressionBC = VK_TRUE;
+
+	VkPhysicalDeviceVulkan13Features vulkan13Features = {};
+	vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+	vulkan13Features.maintenance4 = VK_TRUE;
+	vulkan13Features.synchronization2 = VK_TRUE;
 
     vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
 
     phys_device_selector.set_required_features(required_features);
+	phys_device_selector.set_required_features_13(vulkan13Features);
 
     auto phys_device_ret = phys_device_selector.set_surface(init.surface).select();
     if (!phys_device_ret) {
@@ -315,16 +255,21 @@ int device_initialization(Init& init) {
         return -1;
     }
 
+	VmaVulkanFunctions vulkanFunctions = {};
+	vulkanFunctions.vkGetInstanceProcAddr = init.inst_disp.fp_vkGetInstanceProcAddr;
+	vulkanFunctions.vkGetDeviceProcAddr = init.device.fp_vkGetDeviceProcAddr;
+
     VmaAllocatorCreateInfo allocatorInfo = {};
     allocatorInfo.physicalDevice = physical_device.physical_device;
     allocatorInfo.device = init.device.device;
     allocatorInfo.instance = init.instance.instance;
+	allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
 
     if (vmaCreateAllocator(&allocatorInfo, &init.allocator) != VK_SUCCESS) {
         std::cout << "failed to create VMA allocator\n";
         return -1;
     }
-
 
     return 0;
 }
@@ -343,23 +288,6 @@ int create_swapchain(Init& init) {
     return 0;
 }
 
-//int get_queues(Init& init, RenderData& data) {
-//    auto gq = init.device.get_queue(vkb::QueueType::graphics);
-//    if (!gq.has_value()) {
-//        std::cout << "failed to get graphics queue: " << gq.error().message() << "\n";
-//        return -1;
-//    }
-//    data.graphics_queue = gq.value();
-//
-//    auto pq = init.device.get_queue(vkb::QueueType::present);
-//    if (!pq.has_value()) {
-//        std::cout << "failed to get present queue: " << pq.error().message() << "\n";
-//        return -1;
-//    }
-//    data.present_queue = pq.value();
-//    return 0;
-//}
-
 int create_render_pass(Init& init, RenderData& data) {
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = init.swapchain.image_format;
@@ -372,7 +300,7 @@ int create_render_pass(Init& init, RenderData& data) {
     color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentDescription depthAttachment = {};
-    depthAttachment.format = findDepthFormat(init);
+    depthAttachment.format = VK_FORMAT_D24_UNORM_S8_UINT;
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -828,7 +756,7 @@ int draw_frame(Init& init, RenderData& data) {
     }
     data.image_in_flight[image_index] = data.in_flight_fences[data.current_frame];
 
-    updateUniformBuffer(image_index, init, data);
+	update_uniform_buffer(image_index, init, data);
 
     // Record the command buffer for this frame
     if (record_command_buffer(init, data, image_index) != 0) {
