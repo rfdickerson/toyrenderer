@@ -213,13 +213,24 @@ int device_initialization(Init& init) {
 	vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 	vulkan13Features.maintenance4 = VK_TRUE;
 	vulkan13Features.synchronization2 = VK_TRUE;
+	vulkan13Features.dynamicRendering = VK_TRUE;
+
+	VkPhysicalDeviceVulkan12Features features12 = {};
+	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	features12.bufferDeviceAddress = VK_TRUE;
+	features12.descriptorIndexing = true;
+
+	VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_features = {};
+	dynamic_rendering_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+	dynamic_rendering_features.dynamicRendering = VK_TRUE;
 
     vkb::PhysicalDeviceSelector phys_device_selector(init.instance);
 
-    phys_device_selector.set_required_features(required_features);
-	phys_device_selector.set_required_features_13(vulkan13Features);
-
-    auto phys_device_ret = phys_device_selector.set_surface(init.surface).select();
+    auto phys_device_ret = phys_device_selector
+	                           .set_required_features(required_features)
+	                           .set_required_features_12(features12)
+	                           .set_required_features_13(vulkan13Features)
+	                           .set_surface(init.surface).select();
     if (!phys_device_ret) {
         std::cout << phys_device_ret.error().message() << "\n";
         return -1;
@@ -636,56 +647,119 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0; // Optional
-    beginInfo.pInheritanceInfo = nullptr; // Optional
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     if (init.disp.beginCommandBuffer(data.command_buffers[imageIndex], &beginInfo) != VK_SUCCESS) {
         std::cout << "failed to begin recording command buffer\n";
         return -1;
     }
 
-    render_cubemap(init, data, imageIndex);
+	VkImageMemoryBarrier image_memory_barrier = {};
+	image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	image_memory_barrier.image = data.swapchain_images[imageIndex];
+	image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	image_memory_barrier.subresourceRange.baseMipLevel = 0;
+	image_memory_barrier.subresourceRange.levelCount = 1;
+	image_memory_barrier.subresourceRange.baseArrayLayer = 0;
+	image_memory_barrier.subresourceRange.layerCount = 1;
+	image_memory_barrier.srcAccessMask = 0;
+	image_memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-    std::array<VkClearValue, 1> clearValues = {};
-    clearValues[0].depthStencil = {1.0f, 0};
+	init.disp.cmdPipelineBarrier(data.command_buffers[imageIndex],
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
 
-    VkRenderPassBeginInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = data.render_pass;
-    renderPassInfo.framebuffer = data.framebuffers[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = init.swapchain.extent;
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
+	// transition the depth image from undefined to depth-stencil attachment optimal
+	image_memory_barrier.image = data.depth_image.image;
+	image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+	image_memory_barrier.srcAccessMask = 0;
+	image_memory_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    init.disp.cmdBeginRenderPass(data.command_buffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	init.disp.cmdPipelineBarrier(
+	             data.command_buffers[imageIndex],
+	             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+	             0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
 
-    init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
+    //render_cubemap(init, data, imageIndex);
 
-    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
+//    std::array<VkClearValue, 1> clearValues = {};
+//    clearValues[0].depthStencil = {1.0f, 0};
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(init.swapchain.extent.width);
-    viewport.height = static_cast<float>(init.swapchain.extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    init.disp.cmdSetViewport(data.command_buffers[imageIndex], 0, 1, &viewport);
+//    VkRenderPassBeginInfo renderPassInfo = {};
+//    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+//    renderPassInfo.renderPass = data.render_pass;
+//    renderPassInfo.framebuffer = data.framebuffers[imageIndex];
+//    renderPassInfo.renderArea.offset = {0, 0};
+//    renderPassInfo.renderArea.extent = init.swapchain.extent;
+//    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+//    renderPassInfo.pClearValues = clearValues.data();
+//
+//    init.disp.cmdBeginRenderPass(data.command_buffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+//
+//    init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+//
+//    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
+//
+//    VkViewport viewport{};
+//    viewport.x = 0.0f;
+//    viewport.y = 0.0f;
+//    viewport.width = static_cast<float>(init.swapchain.extent.width);
+//    viewport.height = static_cast<float>(init.swapchain.extent.height);
+//    viewport.minDepth = 0.0f;
+//    viewport.maxDepth = 1.0f;
+//    init.disp.cmdSetViewport(data.command_buffers[imageIndex], 0, 1, &viewport);
+//
+//    VkRect2D scissor{};
+//    scissor.offset = {0, 0};
+//    scissor.extent = init.swapchain.extent;
+//    init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
+//
+//	data.mesh->draw(init, data.command_buffers[imageIndex]);
+//	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = init.swapchain.extent;
-    init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
+	// begin pipeline rendering
+//	VkClearValue clearValues[2];
+//	clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
+//	clearValues[1].depthStencil = {1.0f, 0};
+//
+//	VkRenderPassBeginInfo render_pass_info = {};
+//	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+//	render_pass_info.renderPass = nullptr;
+//	render_pass_info.framebuffer = data.framebuffers[imageIndex];
+//	render_pass_info.renderArea.offset = {0, 0};
+//	render_pass_info.renderArea.extent = init.swapchain.extent;
+//	render_pass_info.clearValueCount = 2;
+//	render_pass_info.pClearValues = clearValues;
+//
+//	init.disp.cmdBeginRendering(data.command_buffers[imageIndex], &render_pass_info);
+//
+//	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+//
+//    // Render ImGui
+//    ImGui::Render();
+//    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
+//
+//	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
 
-	data.mesh->draw(init, data.command_buffers[imageIndex]);
-	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
+//    init.disp.cmdEndRenderPass(data.command_buffers[imageIndex]);
 
-    // Render ImGui
-    ImGui::Render();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
+	// transition the swapchain image from color attachment to present
+	image_memory_barrier.image = data.swapchain_images[imageIndex];
+	image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	image_memory_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	image_memory_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
-    init.disp.cmdEndRenderPass(data.command_buffers[imageIndex]);
+	init.disp.cmdPipelineBarrier(
+	             data.command_buffers[imageIndex],
+	             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+	             0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
 
     if (init.disp.endCommandBuffer(data.command_buffers[imageIndex]) != VK_SUCCESS) {
         std::cout << "failed to record command buffer\n";
@@ -869,6 +943,13 @@ int create_imgui(Init& init, RenderData& data) {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
+	VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {};
+	pipeline_rendering_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+	pipeline_rendering_create_info.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+	pipeline_rendering_create_info.pNext = nullptr;
+	pipeline_rendering_create_info.pColorAttachmentFormats = &init.swapchain.image_format;
+	pipeline_rendering_create_info.colorAttachmentCount = 1;
+
     ImGui_ImplGlfw_InitForVulkan(init.window, true);
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.Instance = init.instance.instance;
@@ -882,7 +963,9 @@ int create_imgui(Init& init, RenderData& data) {
     init_info.MinImageCount = init.swapchain.image_count;
     init_info.ImageCount = init.swapchain.image_count;
     init_info.CheckVkResultFn = nullptr;
-    init_info.RenderPass = data.render_pass;
+    init_info.RenderPass = nullptr;
+	init_info.UseDynamicRendering = VK_TRUE;
+	init_info.PipelineRenderingCreateInfo = pipeline_rendering_create_info;
     ImGui_ImplVulkan_Init(&init_info);
 
     ImGui_ImplVulkan_CreateFontsTexture();

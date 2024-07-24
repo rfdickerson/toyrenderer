@@ -186,6 +186,12 @@ VkResult CubeMap::createPipeline() {
     depth_stencil.depthBoundsTestEnable = VK_FALSE;
     depth_stencil.stencilTestEnable = VK_FALSE;
 
+	VkPipelineRenderingCreateInfoKHR pipeline_rendering_create_info = {};
+	pipeline_rendering_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+	pipeline_rendering_create_info.colorAttachmentCount = 1;
+	pipeline_rendering_create_info.pColorAttachmentFormats = &init.swapchain.image_format;
+	pipeline_rendering_create_info.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+
     VkGraphicsPipelineCreateInfo pipeline_info = {};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_info.stageCount = 2;
@@ -197,13 +203,14 @@ VkResult CubeMap::createPipeline() {
     pipeline_info.pMultisampleState = &multisampling;
     pipeline_info.pColorBlendState = &color_blending;
     pipeline_info.layout = pipeline_layout;
-    pipeline_info.renderPass = render_pass;
+    pipeline_info.renderPass = nullptr;
+	pipeline_info.pNext = &pipeline_rendering_create_info;
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.pDepthStencilState = &depth_stencil;
 
     if (vkCreateGraphicsPipelines(init.device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline) != VK_SUCCESS) {
-        return VK_ERROR_INITIALIZATION_FAILED;
+		throw std::runtime_error("failed to create graphics pipeline!");
     }
 
     vkDestroyShaderModule(init.device, vert_shader_module, nullptr);
@@ -211,4 +218,72 @@ VkResult CubeMap::createPipeline() {
 
 
     return VK_SUCCESS;
+}
+
+VkResult CubeMap::render(Init& init, RenderData& render_data, VkCommandBuffer command_buffer, uint32_t image_index)
+{
+	auto frame_index = render_data.current_frame;
+
+	VkRenderingAttachmentInfo color_attachments[1];
+	color_attachments[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	color_attachments[0].pNext = nullptr;
+	color_attachments[0].imageView = render_data.swapchain_image_views[image_index];
+	color_attachments[0].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	color_attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	color_attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	color_attachments[0].clearValue = {0.0f, 0.0f, 0.0f, 1.0f};
+	color_attachments[0].resolveMode = VK_RESOLVE_MODE_NONE;
+	color_attachments[0].resolveImageView = VK_NULL_HANDLE;
+	color_attachments[0].resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkRenderingAttachmentInfo depth_attachment;
+	depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	depth_attachment.pNext = nullptr;
+	depth_attachment.imageView = render_data.depth_image_view;
+	depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	depth_attachment.clearValue = {1.0f, 0};
+	depth_attachment.resolveMode = VK_RESOLVE_MODE_NONE;
+	depth_attachment.resolveImageView = VK_NULL_HANDLE;
+	depth_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkRenderingInfo rendering_info;
+	rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	rendering_info.pNext = nullptr;
+	rendering_info.flags = 0;
+	rendering_info.renderArea.offset = {0, 0};
+	rendering_info.renderArea.extent = init.swapchain.extent;
+	rendering_info.layerCount = 1;
+	rendering_info.viewMask = 0;
+	rendering_info.colorAttachmentCount = 1;
+	rendering_info.pColorAttachments = color_attachments;
+	rendering_info.pDepthAttachment = &depth_attachment;
+	rendering_info.pStencilAttachment = nullptr;
+
+	init.disp.cmdBeginRendering(command_buffer, &rendering_info);
+
+	VkViewport viewport = {};
+	viewport.width = static_cast<float>(init.swapchain.extent.width);
+	viewport.height = static_cast<float>(init.swapchain.extent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.extent = init.swapchain.extent;
+
+	init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
+	init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
+	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+	init.disp.cmdBindDescriptorSets(command_buffer,
+	                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                                render_data.cube_map->pipeline_layout, 0, 1,
+	                                &render_data.descriptor_sets[frame_index], 0, nullptr);
+
+	init.disp.cmdDraw(command_buffer, 36, 1, 0, 0);
+	init.disp.cmdEndRendering(command_buffer);
+
+	return VK_SUCCESS;
+
 }

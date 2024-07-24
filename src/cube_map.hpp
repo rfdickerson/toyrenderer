@@ -22,6 +22,8 @@ class CubeMap
 	VkResult createRenderPass();
 	VkResult createPipeline();
 	VkResult createPipelineLayout();
+
+	VkResult render(Init& init, RenderData& render_data, VkCommandBuffer command_buffer, uint32_t image_index);
 };
 
 } // namespace obsidian
