@@ -727,24 +727,35 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 //	clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
 //	clearValues[1].depthStencil = {1.0f, 0};
 //
-//	VkRenderPassBeginInfo render_pass_info = {};
-//	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-//	render_pass_info.renderPass = nullptr;
-//	render_pass_info.framebuffer = data.framebuffers[imageIndex];
-//	render_pass_info.renderArea.offset = {0, 0};
-//	render_pass_info.renderArea.extent = init.swapchain.extent;
-//	render_pass_info.clearValueCount = 2;
-//	render_pass_info.pClearValues = clearValues;
-//
-//	init.disp.cmdBeginRendering(data.command_buffers[imageIndex], &render_pass_info);
+	VkRenderingAttachmentInfo colorAttachments[1];
+	colorAttachments[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	colorAttachments[0].clearValue.color = {0.0f, 0.0f, 0.0f, 1.0f};
+	colorAttachments[0].clearValue.depthStencil = {1.0f, 0};
+	colorAttachments[0].pNext = nullptr;
+	colorAttachments[0].imageView = data.swapchain_image_views[imageIndex];
+	colorAttachments[0].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	colorAttachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachments[0].resolveMode = VK_RESOLVE_MODE_NONE;
+	colorAttachments[0].resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachments[0].resolveImageView = VK_NULL_HANDLE;
+
+	VkRenderingInfo renderingInfo = {};
+	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderingInfo.colorAttachmentCount = 1;
+	renderingInfo.pColorAttachments = colorAttachments;
+	renderingInfo.renderArea = {0, 0, init.swapchain.extent.width, init.swapchain.extent.height};
+	renderingInfo.layerCount = 1;
+
+	init.disp.cmdBeginRendering(data.command_buffers[imageIndex], &renderingInfo);
 //
 //	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 //
 //    // Render ImGui
-//    ImGui::Render();
-//    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
-//
-//	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
+
+	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
 
 //    init.disp.cmdEndRenderPass(data.command_buffers[imageIndex]);
 
