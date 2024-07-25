@@ -500,6 +500,14 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.stencilTestEnable = VK_FALSE;
 
+	// set up dynamic rendering
+	VkPipelineRenderingCreateInfo renderingCreateInfo = {};
+	renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+	renderingCreateInfo.pNext = nullptr;
+	renderingCreateInfo.colorAttachmentCount = 1;
+	renderingCreateInfo.pColorAttachmentFormats = &init.swapchain.image_format;
+	renderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+
     VkGraphicsPipelineCreateInfo pipeline_info = {};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_info.stageCount = 2;
@@ -512,10 +520,11 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     pipeline_info.pColorBlendState = &color_blending;
     pipeline_info.pDynamicState = &dynamic_info;
     pipeline_info.layout = data.pipeline_layout;
-    pipeline_info.renderPass = data.render_pass;
+    pipeline_info.renderPass = nullptr;
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.pDepthStencilState = &depthStencil;
+	pipeline_info.pNext = &renderingCreateInfo;
 
     if (init.disp.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &data.graphics_pipeline) != VK_SUCCESS) {
         std::cout << "failed to create pipline\n";
@@ -641,6 +650,50 @@ int render_cubemap(Init& init, RenderData& data, uint32_t imageIndex) {
     return 0;
 }
 
+void begin_rendering(Init& init,
+                     const VkCommandBuffer command_buffer,
+                     const VkImageView& image_view,
+                     const VkImageView& depth_image_view) {
+
+	VkRenderingAttachmentInfo color_attachments[1];
+	color_attachments[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	color_attachments[0].clearValue.color = {0.0f, 0.0f, 0.0f, 1.0f};
+	color_attachments[0].clearValue.depthStencil = {1.0f, 0};
+	color_attachments[0].pNext = nullptr;
+	color_attachments[0].imageView = image_view;
+	color_attachments[0].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	color_attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+	color_attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	color_attachments[0].resolveMode = VK_RESOLVE_MODE_NONE;
+	color_attachments[0].resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	color_attachments[0].resolveImageView = VK_NULL_HANDLE;
+
+	VkRenderingAttachmentInfo depth_attachment = {};
+	depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+	depth_attachment.clearValue.color = {0.0f, 0.0f, 0.0f, 1.0f};
+	depth_attachment.clearValue.depthStencil = {1.0f, 0};
+	depth_attachment.pNext = nullptr;
+	depth_attachment.imageView = depth_image_view;
+	depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	depth_attachment.resolveMode = VK_RESOLVE_MODE_NONE;
+	depth_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	depth_attachment.resolveImageView = VK_NULL_HANDLE;
+
+	VkRenderingInfo rendering_info = {};
+	rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	rendering_info.pNext = nullptr;
+	rendering_info.flags = 0;
+	rendering_info.pColorAttachments = color_attachments;
+	rendering_info.colorAttachmentCount = 1;
+	rendering_info.pDepthAttachment = &depth_attachment;
+	rendering_info.layerCount = 1;
+	rendering_info.renderArea = {0, 0, init.swapchain.extent.width, init.swapchain.extent.height};
+
+	init.disp.cmdBeginRendering(command_buffer, &rendering_info);
+}
+
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
@@ -685,6 +738,7 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	             0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
 
 	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
+
     //render_cubemap(init, data, imageIndex);
 
 //    std::array<VkClearValue, 1> clearValues = {};
@@ -727,6 +781,13 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 //	clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
 //	clearValues[1].depthStencil = {1.0f, 0};
 //
+	begin_rendering(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex], data.depth_image_view);
+
+	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+
+	data.mesh->draw(init, data.command_buffers[imageIndex]);
+	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
+
 	VkRenderingAttachmentInfo colorAttachments[1];
 	colorAttachments[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 	colorAttachments[0].clearValue.color = {0.0f, 0.0f, 0.0f, 1.0f};
