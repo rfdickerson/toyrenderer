@@ -56,7 +56,9 @@ add_executable(toyrenderer ${SRC_FILES}
         src/mesh.cpp
         src/mesh.hpp
         src/water_pass.cpp
-        src/water_pass.hpp)
+        src/water_pass.hpp
+        src/debug_utils.cpp
+        src/debug_utils.hpp)
 
 # Compile shaders
 file(GLOB_RECURSE SHADERS

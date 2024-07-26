@@ -9,6 +9,7 @@
 #include "image_loader.hpp"
 #include "cube_map.hpp"
 #include "mesh.hpp"
+#include "debug_utils.hpp"
 
 using namespace obsidian;
 
@@ -694,15 +695,55 @@ void begin_rendering(Init& init,
 	init.disp.cmdBeginRendering(command_buffer, &rendering_info);
 }
 
+void render_imgui(Init& init, RenderData& data, uint32_t imageIndex) {
+
+	std::array<VkRenderingAttachmentInfo, 1> colorAttachments = {{
+    {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .pNext = nullptr,
+        .imageView = data.swapchain_image_views[imageIndex],
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+	    .resolveMode = VK_RESOLVE_MODE_NONE,
+	    .resolveImageView = VK_NULL_HANDLE,
+	    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = {}, // Add this line if needed, or set to your desired clear value
+    }
+	}};
+
+	const VkRenderingInfo renderingInfo = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+	    .renderArea = {0, 0, init.swapchain.extent.width, init.swapchain.extent.height},
+	    .layerCount = 1,
+	    .viewMask = 0,
+	    .colorAttachmentCount = colorAttachments.size(),
+		.pColorAttachments = colorAttachments.data(),
+		.pDepthAttachment = nullptr,
+		.pStencilAttachment = nullptr,
+	};
+
+	begin_debug_label(init, data.command_buffers[imageIndex], "ImGui Rendering", {0.5f, 0.76f, 0.34f});
+	init.disp.cmdBeginRendering(data.command_buffers[imageIndex], &renderingInfo);
+	ImGui::Render();
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
+	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
+	end_debug_label(init, data.command_buffers[imageIndex]);
+}
+
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
+
+	const auto command_buffer = data.command_buffers[imageIndex];
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    if (init.disp.beginCommandBuffer(data.command_buffers[imageIndex], &beginInfo) != VK_SUCCESS) {
+    if (init.disp.beginCommandBuffer(command_buffer, &beginInfo) != VK_SUCCESS) {
         std::cout << "failed to begin recording command buffer\n";
         return -1;
     }
@@ -737,88 +778,20 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 	             0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
 
+	begin_debug_label(init, data.command_buffers[imageIndex], "Cube Map Rendering", {1.0f, 0.0f, 0.0f});
 	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
+	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
 
-    //render_cubemap(init, data, imageIndex);
-
-//    std::array<VkClearValue, 1> clearValues = {};
-//    clearValues[0].depthStencil = {1.0f, 0};
-
-//    VkRenderPassBeginInfo renderPassInfo = {};
-//    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-//    renderPassInfo.renderPass = data.render_pass;
-//    renderPassInfo.framebuffer = data.framebuffers[imageIndex];
-//    renderPassInfo.renderArea.offset = {0, 0};
-//    renderPassInfo.renderArea.extent = init.swapchain.extent;
-//    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-//    renderPassInfo.pClearValues = clearValues.data();
-//
-//    init.disp.cmdBeginRenderPass(data.command_buffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-//
-//    init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-//
-//    init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
-//
-//    VkViewport viewport{};
-//    viewport.x = 0.0f;
-//    viewport.y = 0.0f;
-//    viewport.width = static_cast<float>(init.swapchain.extent.width);
-//    viewport.height = static_cast<float>(init.swapchain.extent.height);
-//    viewport.minDepth = 0.0f;
-//    viewport.maxDepth = 1.0f;
-//    init.disp.cmdSetViewport(data.command_buffers[imageIndex], 0, 1, &viewport);
-//
-//    VkRect2D scissor{};
-//    scissor.offset = {0, 0};
-//    scissor.extent = init.swapchain.extent;
-//    init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
-//
-//	data.mesh->draw(init, data.command_buffers[imageIndex]);
-//	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
-
-	// begin pipeline rendering
-//	VkClearValue clearValues[2];
-//	clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
-//	clearValues[1].depthStencil = {1.0f, 0};
-//
+	begin_debug_label(init, data.command_buffers[imageIndex], "Main Rendering", {1.0f, 1.0f, 0.0f});
 	begin_rendering(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex], data.depth_image_view);
 
 	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 
 	data.mesh->draw(init, data.command_buffers[imageIndex]);
 	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
+	end_debug_label(init, data.command_buffers[imageIndex]);
 
-	VkRenderingAttachmentInfo colorAttachments[1];
-	colorAttachments[0].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-	colorAttachments[0].clearValue.color = {0.0f, 0.0f, 0.0f, 1.0f};
-	colorAttachments[0].clearValue.depthStencil = {1.0f, 0};
-	colorAttachments[0].pNext = nullptr;
-	colorAttachments[0].imageView = data.swapchain_image_views[imageIndex];
-	colorAttachments[0].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	colorAttachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-	colorAttachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	colorAttachments[0].resolveMode = VK_RESOLVE_MODE_NONE;
-	colorAttachments[0].resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachments[0].resolveImageView = VK_NULL_HANDLE;
-
-	VkRenderingInfo renderingInfo = {};
-	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-	renderingInfo.colorAttachmentCount = 1;
-	renderingInfo.pColorAttachments = colorAttachments;
-	renderingInfo.renderArea = {0, 0, init.swapchain.extent.width, init.swapchain.extent.height};
-	renderingInfo.layerCount = 1;
-
-	init.disp.cmdBeginRendering(data.command_buffers[imageIndex], &renderingInfo);
-//
-//	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-//
-//    // Render ImGui
-    ImGui::Render();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
-
-	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
-
-//    init.disp.cmdEndRenderPass(data.command_buffers[imageIndex]);
+	render_imgui(init, data, imageIndex);
 
 	// transition the swapchain image from color attachment to present
 	image_memory_barrier.image = data.swapchain_images[imageIndex];
