@@ -24,4 +24,11 @@ VkShaderModule    create_shader_module(Init &init, const std::vector<char> &code
 
 VkResult copy_buffer(Init &init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
+void transition_image_to_color_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
+
+void transition_image_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
+
+void transition_image_to_present(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
+
+
 } // namespace obsidian

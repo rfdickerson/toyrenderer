@@ -695,16 +695,16 @@ void begin_rendering(Init& init,
 	init.disp.cmdBeginRendering(command_buffer, &rendering_info);
 }
 
-void render_imgui(Init& init, RenderData& data, uint32_t imageIndex) {
+void render_imgui(Init& init, const VkCommandBuffer& command_buffer, const VkImageView& image_view) {
 
 	std::array<VkRenderingAttachmentInfo, 1> colorAttachments = {{
     {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .pNext = nullptr,
-        .imageView = data.swapchain_image_views[imageIndex],
+        .imageView = image_view,
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 	    .resolveMode = VK_RESOLVE_MODE_NONE,
-	    .resolveImageView = VK_NULL_HANDLE,
+	    .resolveImageView = nullptr,
 	    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -725,12 +725,12 @@ void render_imgui(Init& init, RenderData& data, uint32_t imageIndex) {
 		.pStencilAttachment = nullptr,
 	};
 
-	begin_debug_label(init, data.command_buffers[imageIndex], "ImGui Rendering", {0.5f, 0.76f, 0.34f});
-	init.disp.cmdBeginRendering(data.command_buffers[imageIndex], &renderingInfo);
+	begin_debug_label(init, command_buffer, "ImGui Rendering", {0.5f, 0.76f, 0.34f});
+	init.disp.cmdBeginRendering(command_buffer, &renderingInfo);
 	ImGui::Render();
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), data.command_buffers[imageIndex]);
-	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
-	end_debug_label(init, data.command_buffers[imageIndex]);
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
+	init.disp.cmdEndRendering(command_buffer);
+	end_debug_label(init, command_buffer);
 }
 
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
@@ -748,35 +748,9 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
         return -1;
     }
 
-	VkImageMemoryBarrier image_memory_barrier = {};
-	image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	image_memory_barrier.image = data.swapchain_images[imageIndex];
-	image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	image_memory_barrier.subresourceRange.baseMipLevel = 0;
-	image_memory_barrier.subresourceRange.levelCount = 1;
-	image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-	image_memory_barrier.subresourceRange.layerCount = 1;
-	image_memory_barrier.srcAccessMask = 0;
-	image_memory_barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-	init.disp.cmdPipelineBarrier(data.command_buffers[imageIndex],
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
-
-	// transition the depth image from undefined to depth-stencil attachment optimal
-	image_memory_barrier.image = data.depth_image.image;
-	image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-	image_memory_barrier.srcAccessMask = 0;
-	image_memory_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-	init.disp.cmdPipelineBarrier(
-	             data.command_buffers[imageIndex],
-	             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-	             0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
+	// transition undefined images
+	transition_image_to_color_attachment(init, command_buffer, data.swapchain_images[imageIndex]);
+	transition_image_to_depth_attachment(init, command_buffer, data.depth_image.image);
 
 	begin_debug_label(init, data.command_buffers[imageIndex], "Cube Map Rendering", {1.0f, 0.0f, 0.0f});
 	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
@@ -791,20 +765,9 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
 	end_debug_label(init, data.command_buffers[imageIndex]);
 
-	render_imgui(init, data, imageIndex);
+	render_imgui(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex]);
 
-	// transition the swapchain image from color attachment to present
-	image_memory_barrier.image = data.swapchain_images[imageIndex];
-	image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	image_memory_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	image_memory_barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-
-	init.disp.cmdPipelineBarrier(
-	             data.command_buffers[imageIndex],
-	             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-	             0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
+	transition_image_to_present(init, data.command_buffers[imageIndex], data.swapchain_images[imageIndex]);
 
     if (init.disp.endCommandBuffer(data.command_buffers[imageIndex]) != VK_SUCCESS) {
         std::cout << "failed to record command buffer\n";
