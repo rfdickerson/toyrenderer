@@ -1187,7 +1187,10 @@ int main() {
     if (0 != create_descriptor_pool(init, render_data)) return -1;
     if (0 != create_imgui(init, render_data)) return -1;
     if (0 != create_uniform_buffers(init, render_data)) return -1;
-    //render_data.texture = std::make_unique<Texture>(init, "../textures/wall.KTX2");
+    //render_data.texture = std::make_unique<Texture>( init, "../textures/wall.KTX2");
+
+	render_data.staging_buffer = create_staging_buffer(init, 65000);
+
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("../textures/wall.KTX2");
     render_data.cube_map_texture = imageLoader->load_cubemap("../textures/clouds.ktx2");
@@ -1226,6 +1229,8 @@ int main() {
 
     delete render_data.cube_map;
     delete imageLoader;
+
+	cleanup_buffer(init, render_data.staging_buffer);
 
     cleanup(init, render_data);
     return 0;

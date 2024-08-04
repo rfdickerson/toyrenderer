@@ -232,11 +232,93 @@ const std::vector<Vertex> cube_vertices = {
     {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
 };
 
-void create_cube_mesh(Init &init, Mesh& mesh) {
+const std::vector<uint16_t> cube_indices = {
+    // Front face
+    0, 1, 2,    // First triangle (bottom-left to top-right)
+    2, 3, 0,    // Second triangle (top-right to top-left)
+
+    // Back face
+    5, 4, 7,
+    7, 6, 5,
+
+    // Top face
+    8, 9, 10,
+    10, 11, 8,
+
+    // Bottom face
+    12, 13, 14,
+    14, 15, 12,
+
+    // Right face
+    17, 16, 19,
+    19, 18, 17,
+
+    // Left face
+    20, 21, 22,
+    22, 23, 20
+};
+
+void create_cube_mesh(Mesh& mesh) {
 	mesh.mesh_type = MeshType::CUBE;
-
 	mesh.vertices = cube_vertices;
+	mesh.indices = cube_indices;
+}
 
+VkResult cleanup_mesh(Init &init, Mesh& mesh)
+{
+	cleanup_buffer(init, mesh.vertex_buffer);
+	cleanup_buffer(init, mesh.index_buffer);
+	return VK_SUCCESS;
+}
+
+VkResult transfer_mesh_to_gpu(Init& init, Mesh& mesh, BufferAllocation staging_buffer)
+{
+
+	// copy vertex data to staging buffer
+	VkDeviceSize vertex_buffer_size = sizeof(mesh.vertices[0]) * mesh.vertices.size();
+	VkDeviceSize index_buffer_size = sizeof(mesh.indices[0]) * mesh.indices.size();
+
+	return VK_SUCCESS;
+
+}
+BufferAllocation create_staging_buffer(Init &init, uint32_t size)
+{
+	BufferAllocation staging_buffer;
+
+	VkBufferCreateInfo buffer_info = {
+	    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+	    .size = size,
+	    .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+	};
+
+	VmaAllocationCreateInfo alloc_info = {
+	    .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+	             VMA_ALLOCATION_CREATE_MAPPED_BIT,
+	    .usage = VMA_MEMORY_USAGE_AUTO,
+	};
+
+	if (vmaCreateBuffer(init.allocator, &buffer_info, &alloc_info, &staging_buffer.buffer, &staging_buffer.allocation, nullptr) != VK_SUCCESS)
+	{
+		throw std::runtime_error("failed to create staging buffer!");
+	}
+
+	return staging_buffer;
+}
+
+VkResult copy_buffer_data(Init &init,
+                          const VkCommandBuffer &commandBuffer,
+                          BufferAllocation &src_buffer,
+                          BufferAllocation &dst_buffer,
+                          uint32_t size, uint32_t src_offset, uint32_t dst_offset)
+{
+	VkBufferCopy copyRegion = {};
+	copyRegion.size = size;
+	copyRegion.srcOffset = src_offset;
+	copyRegion.dstOffset = dst_offset;
+	init.disp.cmdCopyBuffer(commandBuffer, src_buffer.buffer, dst_buffer.buffer, 1, &copyRegion);
+
+	return VK_SUCCESS;
 }
 
 

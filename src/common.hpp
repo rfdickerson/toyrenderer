@@ -52,9 +52,6 @@ struct RenderData
 	std::vector<VkFence>     image_in_flight;
 	size_t                   current_frame = 0;
 
-//	BufferAllocation vertex_buffer;
-//	BufferAllocation index_buffer;
-
 	std::vector<BufferAllocation> uniform_buffers;
 
 	VkDescriptorPool             descriptor_pool;
@@ -67,6 +64,8 @@ struct RenderData
 	CubeMap         *cube_map;
 	Mesh 		   	*mesh;
 	Mesh 		   	*plane_mesh;
+
+	BufferAllocation staging_buffer;
 
 	struct
 	{
