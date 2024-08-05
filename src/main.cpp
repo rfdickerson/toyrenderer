@@ -10,6 +10,7 @@
 #include "cube_map.hpp"
 #include "mesh.hpp"
 #include "debug_utils.hpp"
+#include "shadow.hpp"
 
 using namespace obsidian;
 
@@ -737,7 +738,7 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     init.disp.resetCommandBuffer(data.command_buffers[imageIndex], 0);
 
-	const auto command_buffer = data.command_buffers[imageIndex];
+	auto command_buffer = data.command_buffers[imageIndex];
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -756,12 +757,20 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
 	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
 
+	// shadow map rendering
+	begin_debug_label(init, data.command_buffers[imageIndex], "Shadow Map Rendering", {0.0f, 1.0f, 0.0f});
+	draw_shadow(init, data, command_buffer);
+	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
+
 	begin_debug_label(init, data.command_buffers[imageIndex], "Main Rendering", {1.0f, 1.0f, 0.0f});
 	begin_rendering(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex], data.depth_image_view);
 
 	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+	// bind descriptor sets
+	init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
 
 	data.mesh->draw(init, data.command_buffers[imageIndex]);
+	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
 	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
 	end_debug_label(init, data.command_buffers[imageIndex]);
 
@@ -1051,10 +1060,20 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
             .pImmutableSamplers = nullptr,
     };
 
-    std::array<VkDescriptorSetLayoutBinding, 3> bindings = {
+	// add shadow map sampler binding
+	VkDescriptorSetLayoutBinding shadowmap_sampler_layout_binding = {
+		.binding = 3,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	};
+
+    std::array<VkDescriptorSetLayoutBinding, 4> bindings = {
             ubo_layout_binding,
             sampler_layout_binding,
-            cubemap_sampler_layout_binding
+            cubemap_sampler_layout_binding,
+			shadowmap_sampler_layout_binding,
     };
 
     VkDescriptorSetLayoutCreateInfo layout_info = {};
@@ -1187,6 +1206,9 @@ int main() {
     if (0 != create_descriptor_pool(init, render_data)) return -1;
     if (0 != create_imgui(init, render_data)) return -1;
     if (0 != create_uniform_buffers(init, render_data)) return -1;
+
+	init_shadow_pipeline(init, render_data);
+	init_shadow_map(init, render_data);
     //render_data.texture = std::make_unique<Texture>( init, "../textures/wall.KTX2");
 
 	render_data.staging_buffer = create_staging_buffer(init, 65000);
@@ -1206,6 +1228,10 @@ int main() {
     float deltaTime = 0.0f;
 
 	configure_mouse_input(init, render_data);
+
+	// update shadow uniform buffer
+	update_shadow_uniform_buffer(init, render_data);
+	update_descriptor_set(init, render_data);
 
     while (!glfwWindowShouldClose(init.window)) {
 
@@ -1229,6 +1255,8 @@ int main() {
 
     delete render_data.cube_map;
     delete imageLoader;
+
+	cleanup_shadow_map(init, render_data);
 
 	cleanup_buffer(init, render_data.staging_buffer);
 

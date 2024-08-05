@@ -8,6 +8,7 @@ namespace obsidian
 
 class CubeMap;
 struct Mesh;
+struct ShadowMap;
 
 struct Init
 {
@@ -54,16 +55,25 @@ struct RenderData
 
 	std::vector<BufferAllocation> uniform_buffers;
 
+
 	VkDescriptorPool             descriptor_pool;
 	VkDescriptorSetLayout        descriptor_set_layout;
 	std::vector<VkDescriptorSet> descriptor_sets;
 
 	Camera camera;
-	TextureImage     texture;
-	TextureImage     cube_map_texture;
+	TextureImage    texture;
+	TextureImage    cube_map_texture;
 	CubeMap         *cube_map;
 	Mesh 		   	*mesh;
 	Mesh 		   	*plane_mesh;
+
+	// shadow stuff
+	ShadowMap 	   			*shadow_map;
+	BufferAllocation 		shadow_ubo;
+	VkPipelineLayout 		shadow_pipeline_layout;
+	VkPipeline 		   		shadow_pipeline;
+	VkDescriptorSetLayout 	shadow_descriptor_set_layout;
+	VkDescriptorSet 		shadow_descriptor_set;
 
 	BufferAllocation staging_buffer;
 
