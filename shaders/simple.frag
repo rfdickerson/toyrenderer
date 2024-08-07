@@ -26,7 +26,11 @@ float ShadowCalculation(vec4 fragPosLightSpace)
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
 
     // Transform to [0,1] range
-    projCoords = projCoords * 0.5 + 0.5;
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
+
+    // Check if projection is outside the shadow map
+    if(projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+        return 0.0;
 
     // Get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
     float closestDepth = texture(shadowMap, projCoords.xy).r;
@@ -38,11 +42,10 @@ float ShadowCalculation(vec4 fragPosLightSpace)
     float bias = 0.005;
 
     // Check whether current frag pos is in shadow
+    //float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
+
     float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
 
-    // Check if projection is outside the shadow map
-    if(projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-        shadow = 0.0;
 
     return shadow;
 }

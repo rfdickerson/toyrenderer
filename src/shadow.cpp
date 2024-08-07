@@ -14,7 +14,7 @@ namespace obsidian
 
 constexpr uint32_t SHADOW_MAP_WIDTH  = 2048;
 constexpr uint32_t SHADOW_MAP_HEIGHT = 2048;
-constexpr VkFormat SHADOW_MAP_FORMAT = VK_FORMAT_D32_SFLOAT;
+constexpr VkFormat SHADOW_MAP_FORMAT = VK_FORMAT_D16_UNORM;
 
 struct AllocatedImage
 {
@@ -71,19 +71,19 @@ void create_sampler(Init &init, AllocatedImage &allocated_image)
 	sampler_info.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	sampler_info.magFilter               = VK_FILTER_LINEAR;
 	sampler_info.minFilter               = VK_FILTER_LINEAR;
-	sampler_info.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	sampler_info.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	sampler_info.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	sampler_info.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	sampler_info.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+	sampler_info.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 	sampler_info.anisotropyEnable        = VK_FALSE;
 	sampler_info.maxAnisotropy           = 1.0f;
 	sampler_info.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 	sampler_info.unnormalizedCoordinates = VK_FALSE;
-	sampler_info.compareEnable           = VK_FALSE;
+	sampler_info.compareEnable           = VK_TRUE;
 	sampler_info.compareOp               = VK_COMPARE_OP_LESS;
-	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 	sampler_info.mipLodBias              = 0.0f;
 	sampler_info.minLod                  = 0.0f;
-	sampler_info.maxLod                  = 1.0f;
+	sampler_info.maxLod                  = 0.0f;
 
 	vkCreateSampler(init.device, &sampler_info, nullptr, &allocated_image.sampler);
 }
@@ -181,8 +181,9 @@ glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
 	    glm::vec3(0.0f, 1.0f, 0.0f));                         // up vector
 
 	// create orthographic projection matrix
-	float near_plane = 0.1f;
+	float near_plane = -20.0f;
 	float far_plane = 20.0f;
+
 
 	glm::mat4 light_projection = glm::ortho(
 	    -scene_radius, scene_radius,
@@ -200,6 +201,7 @@ void init_shadow_map(Init &init, RenderData &data) {
 	const glm::vec3 center = glm::vec3(0.0f);
 
 	float radius = 10.0f;
+
 	data.shadow_map.light_direction = light_direction;
 	data.shadow_map.light_space_matrix = calculate_light_space_matrix(light_direction, center, radius);
 
@@ -289,6 +291,11 @@ VkPipeline create_shadow_pipeline(Init &init, VkPipelineLayout pipeline_layout) 
 	rasterizer.depthBiasConstantFactor = 1.25f;
 	rasterizer.depthBiasClamp = 0.0f;
 	rasterizer.depthBiasSlopeFactor = 1.75f;
+
+//	rasterizer.depthBiasEnable = VK_FALSE;
+//	rasterizer.depthBiasConstantFactor = 1.25f;
+//	rasterizer.depthBiasClamp = 0.0f;
+//	rasterizer.depthBiasSlopeFactor = 1.75f;
 
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
