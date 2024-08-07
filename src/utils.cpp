@@ -162,6 +162,33 @@ void transition_image_to_depth_attachment(Init &init, const VkCommandBuffer& com
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
+void transition_shadowmap_to_shader_read(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image) {
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	init.disp.cmdPipelineBarrier(
+	    command_buffer,
+		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+	 	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+	 	0,
+	    0, nullptr,
+	    0, nullptr,
+	    1, &barrier);
+
+}
+
 void transition_image_to_present(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
 {
 	VkImageMemoryBarrier barrier{};
@@ -180,6 +207,60 @@ void transition_image_to_present(Init &init, const VkCommandBuffer& command_buff
 	barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
 	init.disp.cmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+}
+
+void transition_shadowmap_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
+{
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	init.disp.cmdPipelineBarrier(
+	    command_buffer,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+	 	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+	 	0,
+	    0, nullptr,
+	    0, nullptr,
+	    1, &barrier);
+}
+
+void transition_shadowmap_initial(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
+{
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
+	barrier.srcAccessMask = 0;
+	barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	init.disp.cmdPipelineBarrier(
+	    command_buffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+	 	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+	 	0,
+	    0, nullptr,
+	    0, nullptr,
+	    1, &barrier);
 }
 
 }

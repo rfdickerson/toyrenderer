@@ -148,7 +148,9 @@ void update_uniform_buffer(uint32_t current, Init &init, RenderData& renderData)
 	UniformBufferObject ubo {
 		.model = glm::mat4(1.0f),
 		.view = renderData.camera.getViewMatrix(),
-		.proj = renderData.camera.getProjectionMatrix()
+		.proj = renderData.camera.getProjectionMatrix(),
+	    .lightSpaceMatrix = renderData.shadow_map.light_space_matrix,
+	    .lightDirection = renderData.shadow_map.light_direction
 	};
 
 	copy_buffer_data(init, renderData.uniform_buffers[current], sizeof(ubo), &ubo);
@@ -451,7 +453,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -757,13 +759,35 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
 	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
 
+	// transition shadow map image
+	transition_shadowmap_to_depth_attachment(init, command_buffer, data.shadow_map.image);
+
 	// shadow map rendering
 	begin_debug_label(init, data.command_buffers[imageIndex], "Shadow Map Rendering", {0.0f, 1.0f, 0.0f});
-	draw_shadow(init, data, command_buffer);
+	draw_shadow(init, data, command_buffer, imageIndex);
 	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
+
+	// transition shadow map image
+	transition_shadowmap_to_shader_read(init, command_buffer, data.shadow_map.image);
 
 	begin_debug_label(init, data.command_buffers[imageIndex], "Main Rendering", {1.0f, 1.0f, 0.0f});
 	begin_rendering(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex], data.depth_image_view);
+
+	// set scissor and viewport
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = (float)init.swapchain.extent.width;
+	viewport.height = (float)init.swapchain.extent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = {0, 0};
+	scissor.extent = init.swapchain.extent;
+
+	init.disp.cmdSetViewport(data.command_buffers[imageIndex], 0, 1, &viewport);
+	init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
 
 	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 	// bind descriptor sets
@@ -1039,7 +1063,7 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
     ubo_layout_binding.binding = 0;
     ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     ubo_layout_binding.descriptorCount = 1;
-    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     ubo_layout_binding.pImmutableSamplers = nullptr;
 
     // add the sampler binding
@@ -1088,7 +1112,7 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
     return 0;
 }
 
-int create_descriptor_sets(Init& init, RenderData& renderData) {
+int  create_descriptor_sets(Init& init, RenderData& renderData) {
     std::vector<VkDescriptorSetLayout> layouts(init.swapchain.image_count, renderData.descriptor_set_layout);
 
     VkDescriptorSetAllocateInfo alloc_info = {};
@@ -1121,7 +1145,12 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
-        std::array<VkWriteDescriptorSet, 3> descriptor_writes = {};
+		VkDescriptorImageInfo shadowmap_image_info = {
+		    .sampler     = renderData.shadow_map.sampler,
+		    .imageView   = renderData.shadow_map.image_view,
+		    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+
+        std::array<VkWriteDescriptorSet, 4> descriptor_writes = {};
 
         descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_writes[0].dstSet = renderData.descriptor_sets[i];
@@ -1146,6 +1175,14 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
         descriptor_writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptor_writes[2].descriptorCount = 1;
         descriptor_writes[2].pImageInfo = &cubemap_image_info;
+
+		descriptor_writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptor_writes[3].dstSet = renderData.descriptor_sets[i];
+		descriptor_writes[3].dstBinding = 3;
+		descriptor_writes[3].dstArrayElement = 0;
+		descriptor_writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptor_writes[3].descriptorCount = 1;
+		descriptor_writes[3].pImageInfo = &shadowmap_image_info;
 
         init.disp.updateDescriptorSets(descriptor_writes.size(), descriptor_writes.data(), 0, nullptr);
     }
@@ -1174,6 +1211,10 @@ int create_new_imgui_frame(Init& init, RenderData& render_data) {
 	ImGui::Text("This is some useful text.");
 	// show camera coordinates
 	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
+
+	// show camera facing
+	ImGui::Text("Camera facing: %.2f %.2f %.2f", render_data.camera.front.x, render_data.camera.front.y, render_data.camera.front.z);
+
 	ImGui::End();
 
 	int res = draw_frame(init, render_data);
@@ -1221,7 +1262,7 @@ int main() {
     if (0 != create_descriptor_sets(init, render_data)) return -1;
 	render_data.mesh = Mesh::create_cube();
 	render_data.mesh->transfer_mesh(init);
-	render_data.plane_mesh = Mesh::create_plane(10, 20);
+	render_data.plane_mesh = Mesh::create_plane(10, 10);
 	render_data.plane_mesh->transfer_mesh(init);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
@@ -1229,9 +1270,9 @@ int main() {
 
 	configure_mouse_input(init, render_data);
 
-	// update shadow uniform buffer
-	update_shadow_uniform_buffer(init, render_data);
-	update_descriptor_set(init, render_data);
+	const auto cmdBuffer = begin_single_time_commands(init);
+	transition_shadowmap_initial(init, cmdBuffer, render_data.shadow_map.image);
+	end_single_time_commands(init, cmdBuffer);
 
     while (!glfwWindowShouldClose(init.window)) {
 

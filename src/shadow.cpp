@@ -79,7 +79,7 @@ void create_sampler(Init &init, AllocatedImage &allocated_image)
 	sampler_info.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 	sampler_info.unnormalizedCoordinates = VK_FALSE;
 	sampler_info.compareEnable           = VK_FALSE;
-	sampler_info.compareOp               = VK_COMPARE_OP_ALWAYS;
+	sampler_info.compareOp               = VK_COMPARE_OP_LESS;
 	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	sampler_info.mipLodBias              = 0.0f;
 	sampler_info.minLod                  = 0.0f;
@@ -90,11 +90,9 @@ void create_sampler(Init &init, AllocatedImage &allocated_image)
 
 void cleanup_shadow_map(Init &init, RenderData &data)
 {
-	vkDestroySampler(init.device, data.shadow_map->sampler, nullptr);
-	vkDestroyImageView(init.device, data.shadow_map->image_view, nullptr);
-	vmaDestroyImage(init.allocator, data.shadow_map->image, data.shadow_map->allocation);
-
-	delete data.shadow_map;
+	vkDestroySampler(init.device, data.shadow_map.sampler, nullptr);
+	vkDestroyImageView(init.device, data.shadow_map.image_view, nullptr);
+	vmaDestroyImage(init.allocator, data.shadow_map.image, data.shadow_map.allocation);
 }
 
 void create_shadow_map(Init &init, RenderData& data, uint32_t width, uint32_t height)
@@ -105,21 +103,21 @@ void create_shadow_map(Init &init, RenderData& data, uint32_t width, uint32_t he
 	// create sampler
 	create_sampler(init, allocated_image);
 
-	data.shadow_map->image = allocated_image.image;
-	data.shadow_map->allocation = allocated_image.allocation;
-	data.shadow_map->image_view = allocated_image.image_view;
-	data.shadow_map->sampler = allocated_image.sampler;
+	data.shadow_map.image = allocated_image.image;
+	data.shadow_map.allocation = allocated_image.allocation;
+	data.shadow_map.image_view = allocated_image.image_view;
+	data.shadow_map.sampler = allocated_image.sampler;
 
 
 }
 
-void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer)
+void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer, uint32_t image_index)
 {
 	// create dynamic render pass
 	VkRenderingAttachmentInfo attachment_info = {};
 	attachment_info.sType                     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 	attachment_info.pNext                     = nullptr;
-	attachment_info.imageView                 = data.shadow_map->image_view;
+	attachment_info.imageView                 = data.shadow_map.image_view;
 	attachment_info.imageLayout               = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 	attachment_info.resolveImageView          = nullptr;
 	attachment_info.resolveImageLayout        = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -141,15 +139,32 @@ void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer)
 
 	init.disp.cmdBeginRendering(command_buffer, &render_info);
 
+	// Set viewport
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(SHADOW_MAP_WIDTH);
+	viewport.height = static_cast<float>(SHADOW_MAP_HEIGHT);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	// Set scissor
+	VkRect2D scissor{};
+	scissor.offset = {0, 0};
+	scissor.extent = {SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT};
+
+	init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
+	init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
+
 	// draw scene
 	// bind pipeline
 	init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline);
 
 	// bind descriptor set
-	init.disp.cmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline_layout, 0, 1, &data.shadow_descriptor_set, 0, nullptr);
+	init.disp.cmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline_layout, 0, 1, &data.descriptor_sets[image_index], 0, nullptr);
 
 	data.mesh->draw(init, command_buffer);
-	data.plane_mesh->draw(init, command_buffer);
+	//data.plane_mesh->draw(init, command_buffer);
 
 	init.disp.cmdEndRendering(command_buffer);
 }
@@ -158,99 +173,43 @@ glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
                                        const glm::vec3 &scene_center,
                                        float            scene_radius)
 {
+	glm::vec3 light_position = scene_center - light_direction * scene_radius;
+
 	glm::mat4 light_view = glm::lookAt(
-	    scene_center - light_direction * scene_radius,        // light position
+	    light_position,        // light position
 	    scene_center,                                         // look at the center of the scene
 	    glm::vec3(0.0f, 1.0f, 0.0f));                         // up vector
 
 	// create orthographic projection matrix
-	float near_plane = 1.0f, far_plane = 2 * scene_radius;
+	float near_plane = 0.1f;
+	float far_plane = 20.0f;
+
 	glm::mat4 light_projection = glm::ortho(
 	    -scene_radius, scene_radius,
 	    -scene_radius, scene_radius,
-	    near_plane, far_plane);
+	    near_plane, far_plane
+	    );
 
 	return light_projection * light_view;
 }
 
-void update_shadow_uniform_buffer(Init &init, RenderData &data)
-{
-	ShadowUniformBufferObject ubo = {};
-
-	glm::vec3 light_direction = glm::normalize(glm::vec3(-1.0f, -1.0f, -1.0f));
-	glm::vec3 scene_center(0.0f, 0.0f, 0.0f);
-	float     scene_radius = 5.0f;
-
-	ubo.light_space_matrix = calculate_light_space_matrix(light_direction, scene_center, scene_radius);
-	ubo.light_direction    = light_direction;
-	ubo.padding            = 0.0f;
-
-	void *mapped_data;
-	vmaMapMemory(init.allocator, data.shadow_ubo.allocation, &mapped_data);
-	memcpy(mapped_data, &ubo, sizeof(ubo));
-	vmaUnmapMemory(init.allocator, data.shadow_ubo.allocation);
-}
-
-void update_descriptor_set(Init &init, RenderData &data)
-{
-	VkDescriptorBufferInfo buffer_info = {};
-	buffer_info.buffer = data.shadow_ubo.buffer;
-	buffer_info.offset = 0;
-	buffer_info.range = sizeof(ShadowUniformBufferObject);
-
-	VkWriteDescriptorSet descriptor_write = {};
-	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptor_write.dstSet = data.shadow_descriptor_set;
-	descriptor_write.dstBinding = 0;
-	descriptor_write.dstArrayElement = 0;
-	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptor_write.descriptorCount = 1;
-	descriptor_write.pBufferInfo = &buffer_info;
-
-	vkUpdateDescriptorSets(init.device, 1, &descriptor_write, 0, nullptr);
-}
-
-void create_shadow_uniform_buffer(Init& init, RenderData& data) {
-	create_buffer(init,
-	              sizeof(ShadowUniformBufferObject),
-	              VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	              VMA_MEMORY_USAGE_CPU_TO_GPU,
-	              data.shadow_ubo);
-}
-
 void init_shadow_map(Init &init, RenderData &data) {
-
-	// dynamically allocate shadow map
-	data.shadow_map = new ShadowMap();
-
-	create_shadow_uniform_buffer(init, data);
 	create_shadow_map(init, data, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
-}
 
-VkDescriptorSetLayout create_shadow_descriptor_set_layout(Init& init) {
-	VkDescriptorSetLayoutBinding ubo_layout_binding = {};
-	ubo_layout_binding.binding = 0;
-	ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	ubo_layout_binding.descriptorCount = 1;
-	ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	ubo_layout_binding.pImmutableSamplers = nullptr;
+	const glm::vec3 light_direction = glm::normalize(glm::vec3(-1.0f, -2.0f, -1.0f));
+	const glm::vec3 center = glm::vec3(0.0f);
 
-	VkDescriptorSetLayoutCreateInfo layout_info = {};
-	layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layout_info.bindingCount = 1;
-	layout_info.pBindings = &ubo_layout_binding;
+	float radius = 10.0f;
+	data.shadow_map.light_direction = light_direction;
+	data.shadow_map.light_space_matrix = calculate_light_space_matrix(light_direction, center, radius);
 
-	VkDescriptorSetLayout descriptor_set_layout;
-	vkCreateDescriptorSetLayout(init.device, &layout_info, nullptr, &descriptor_set_layout);
-
-	return descriptor_set_layout;
 }
 
 VkPipelineLayout create_shadow_pipeline_layout(Init& init, RenderData& data) {
 	VkPipelineLayoutCreateInfo pipeline_layout_info = {};
 	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipeline_layout_info.setLayoutCount = 1;
-	pipeline_layout_info.pSetLayouts = &data.shadow_descriptor_set_layout;
+	pipeline_layout_info.pSetLayouts = &data.descriptor_set_layout;
 	pipeline_layout_info.pushConstantRangeCount = 0;
 	pipeline_layout_info.pPushConstantRanges = nullptr;
 
@@ -260,7 +219,7 @@ VkPipelineLayout create_shadow_pipeline_layout(Init& init, RenderData& data) {
 	return pipeline_layout;
 }
 
-VkPipeline create_shadow_pipeline(Init &init, RenderData &data, VkPipelineLayout pipeline_layout) {
+VkPipeline create_shadow_pipeline(Init &init, VkPipelineLayout pipeline_layout) {
 
 	auto vert_code = read_file("shaders/shadow.vert.spv");
 
@@ -325,10 +284,11 @@ VkPipeline create_shadow_pipeline(Init &init, RenderData &data, VkPipelineLayout
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_NONE;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
 	rasterizer.depthBiasEnable = VK_TRUE;
-	rasterizer.depthBiasConstantFactor = 2.0f;
+	rasterizer.depthBiasConstantFactor = 1.25f;
 	rasterizer.depthBiasClamp = 0.0f;
-	rasterizer.depthBiasSlopeFactor = 2.0f;
+	rasterizer.depthBiasSlopeFactor = 1.75f;
 
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -339,7 +299,7 @@ VkPipeline create_shadow_pipeline(Init &init, RenderData &data, VkPipelineLayout
 	depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depth_stencil.depthTestEnable = VK_TRUE;
 	depth_stencil.depthWriteEnable = VK_TRUE;
-	depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depth_stencil.depthBoundsTestEnable = VK_FALSE;
 	depth_stencil.stencilTestEnable = VK_FALSE;
 
@@ -393,41 +353,11 @@ VkPipeline create_shadow_pipeline(Init &init, RenderData &data, VkPipelineLayout
 	return pipeline;
 }
 
-VkDescriptorSet create_shadow_descriptor_set(Init &init, RenderData &data) {
-	VkDescriptorSetLayout layouts[] = {data.shadow_descriptor_set_layout};
-	VkDescriptorSetAllocateInfo alloc_info = {};
-	alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	alloc_info.descriptorPool = data.descriptor_pool;
-	alloc_info.descriptorSetCount = 1;
-	alloc_info.pSetLayouts = layouts;
 
-	VkDescriptorSet descriptor_set;
-	vkAllocateDescriptorSets(init.device, &alloc_info, &descriptor_set);
-
-	VkDescriptorBufferInfo buffer_info = {};
-	buffer_info.buffer = data.shadow_ubo.buffer;
-	buffer_info.offset = 0;
-	buffer_info.range = sizeof(ShadowUniformBufferObject);
-
-	VkWriteDescriptorSet descriptor_write = {};
-	descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptor_write.dstSet = descriptor_set;
-	descriptor_write.dstBinding = 0;
-	descriptor_write.dstArrayElement = 0;
-	descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	descriptor_write.descriptorCount = 1;
-	descriptor_write.pBufferInfo = &buffer_info;
-
-	vkUpdateDescriptorSets(init.device, 1, &descriptor_write, 0, nullptr);
-
-	return descriptor_set;
-}
 
 void init_shadow_pipeline(Init &init, RenderData &data) {
-	data.shadow_descriptor_set_layout = create_shadow_descriptor_set_layout(init);
 	data.shadow_pipeline_layout = create_shadow_pipeline_layout(init, data);
-	data.shadow_pipeline = create_shadow_pipeline(init, data, data.shadow_pipeline_layout);
-	data.shadow_descriptor_set = create_shadow_descriptor_set(init, data);
+	data.shadow_pipeline = create_shadow_pipeline(init, data.shadow_pipeline_layout);
 }
 
 }		// namespace obsidian

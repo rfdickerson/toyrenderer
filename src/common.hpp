@@ -32,6 +32,15 @@ struct BufferAllocation
 	VkDeviceSize  size;
 };
 
+struct ShadowMap {
+	VkImage image;
+	VkImageView image_view;
+	VmaAllocation allocation;
+	VkSampler sampler;
+	glm::mat4 light_space_matrix;
+	glm::vec3 light_direction;
+};
+
 struct RenderData
 {
 
@@ -68,12 +77,9 @@ struct RenderData
 	Mesh 		   	*plane_mesh;
 
 	// shadow stuff
-	ShadowMap 	   			*shadow_map;
-	BufferAllocation 		shadow_ubo;
+	ShadowMap 	   			shadow_map;
 	VkPipelineLayout 		shadow_pipeline_layout;
 	VkPipeline 		   		shadow_pipeline;
-	VkDescriptorSetLayout 	shadow_descriptor_set_layout;
-	VkDescriptorSet 		shadow_descriptor_set;
 
 	BufferAllocation staging_buffer;
 
@@ -98,30 +104,17 @@ struct Vertex
 	glm::vec3 normal;
 };
 
-struct InstanceData
-{
-	glm::mat4 model;
-};
-
-struct InstancedRenderData
-{
-	BufferAllocation      vertex_buffer;
-	BufferAllocation      instance_buffer;
-	uint32_t              vertex_count;
-	uint32_t              instance_count;
-	uint32_t              max_instance_count;
-	VkDescriptorSetLayout descriptor_set_layout;
-	VkDescriptorPool      descriptor_pool;
-	VkDescriptorSet       descriptor_set;
-	VkPipelineLayout      pipeline_layout;
-};
-
 struct UniformBufferObject
 {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+	glm::mat4 lightSpaceMatrix;
+	glm::vec3 lightDirection;
+	float padding;
 };
+
+
 
 }; // namespace obsidian
 

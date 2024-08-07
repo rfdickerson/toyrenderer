@@ -30,7 +30,9 @@ glm::mat4 Camera::getViewMatrix() const {
 }
 
 glm::mat4 Camera::getProjectionMatrix() const {
-    return glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+    glm::mat4 proj =  glm::perspective(glm::radians(fov), aspectRatio, nearPlane, farPlane);
+	proj[1][1] *= -1;
+	return proj;
 }
 
 void Camera::process_keyboard(CameraMovement direction, float deltaTime) {

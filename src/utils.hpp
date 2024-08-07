@@ -30,5 +30,8 @@ void transition_image_to_depth_attachment(Init &init, const VkCommandBuffer& com
 
 void transition_image_to_present(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
 
+void transition_shadowmap_initial(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
+void transition_shadowmap_to_shader_read(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
+void transition_shadowmap_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
 
 } // namespace obsidian

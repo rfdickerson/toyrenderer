@@ -13,77 +13,66 @@ namespace obsidian
 
 Mesh* Mesh::create_cube()
 {
-	const std::vector<Vertex> vertices = {
-	    // Front face
-	    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-left
-	    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-right
-	    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-right
-	    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-left
+	const std::vector<Vertex> vertices ={
+	    // Front face (Z+)
+	    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // 0. Bottom-left
+	    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // 1. Bottom-right
+	    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // 2. Top-right
+	    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // 3. Top-left
 
-	    // Back face
-	    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
-	    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
-	    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
-	    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
+	    // Back face (Z-)
+	    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // 4. Bottom-left
+	    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // 5. Bottom-right
+	    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // 6. Top-right
+	    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // 7. Top-left
 
 	    // Top face
-	    {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-left
-	    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-right
-	    {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-right
-	    {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-left
+	    {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // 8. Front-left
+	    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // 9. Front-right
+	    {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // 10. Back-right
+	    {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // 11. Back-left
 
 	    // Bottom face
-	    {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-left
-	    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
-	    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-right
-	    {{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
+	    {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // 12. Back-left
+	    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // 13. Back-right
+	    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // 14. Front-right
+	    {{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // 15. Front-left
 
 	    // Right face
-	    {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-front
-	    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Top-front
-	    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Top-back
-	    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-back
+	    {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // 16. Bottom-front
+	    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // 17. Top-front
+	    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // 18. Top-back
+	    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // 19. Bottom-back
 
-	    // Left face
-	    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
-	    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
-	    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
-	    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
+	    // Left face (X-)
+	    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // 20. Bottom-back
+	    {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // 21. Top-back
+	    {{-0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // 22. Top-front
+	    {{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // 23. Bottom-front
 	};
 
-	const std::vector<uint16_t> indices = {
+	const std::vector<uint16_t> cube_indices = {
 	    // Front face
-	    0, 1, 2,    // First triangle (bottom-left to top-right)
-	    2, 3, 0,    // Second triangle (top-right to top-left)
-
+	    1, 2, 0,    2, 3, 0,
 	    // Back face
-	    5, 4, 7,
-	    7, 6, 5,
-
-	    // Top face
-	    8, 9, 10,
-	    10, 11, 8,
-
-	    // Bottom face
-	    12, 13, 14,
-	    14, 15, 12,
-
+	    4, 6, 5,    6, 4, 7,
+	    // Top face (good)
+	    8, 9, 10,   10, 11, 8,
+	    // Bottom face (good)
+	    12, 13, 14, 14, 15, 12,
 	    // Right face
-	    17, 16, 19,
-	    19, 18, 17,
-
+	    16, 18, 17, 18, 16, 19,
 	    // Left face
-	    20, 21, 22,
-	    22, 23, 20
+	    20, 22, 21, 22, 20, 23
 	};
 
 	Mesh* mesh = new Mesh();
 	mesh->mesh_type = MeshType::CUBE;
 	mesh->vertex_count = static_cast<uint32_t>(vertices.size());
-	mesh->index_count = static_cast<uint32_t>(indices.size());
+	mesh->index_count = static_cast<uint32_t>(cube_indices.size());
 
 	mesh->vertices = vertices;
-	mesh->indices = indices;
+	mesh->indices = cube_indices;
 
 	return mesh;
 }
@@ -194,75 +183,75 @@ VkResult Mesh::draw(obsidian::Init &init, VkCommandBuffer commandBuffer)
 	return VK_SUCCESS;
 }
 
-const std::vector<Vertex> cube_vertices = {
-    // Front face
-    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-left
-    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-right
-    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-right
-    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-left
+//const std::vector<Vertex> cube_vertices = {
+//    // Front face
+//    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-left
+//    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f,  1.0f}}, // Bottom-right
+//    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-right
+//    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f,  1.0f}}, // Top-left
+//
+//    // Back face
+//    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
+//    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
+//    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
+//    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
+//
+//    // Top face
+//    {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-left
+//    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-right
+//    {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-right
+//    {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-left
+//
+//    // Bottom face
+//    {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-left
+//    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
+//    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-right
+//    {{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
+//
+//    // Right face
+//    {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-front
+//    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Top-front
+//    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Top-back
+//    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-back
+//
+//    // Left face
+//    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
+//    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
+//    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
+//    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
+//};
+//
+//const std::vector<uint16_t> cube_indices = {
+//    // Front face
+//    0, 1, 2,    // First triangle (bottom-left, bottom-right, top-right)
+//    2, 3, 0,    // Second triangle (top-right, top-left, bottom-left)
+//
+//    // Back face
+//    4, 6, 5,    // First triangle (bottom-left, top-right, bottom-right)
+//    6, 4, 7,    // Second triangle (top-right, bottom-left, top-left)
+//
+//    // Top face
+//    9, 9, 10,   // First triangle (front-left, front-right, back-right)
+//    10, 11, 8,  // Second triangle (back-right, back-left, front-left)
+//
+//    // Bottom face
+//    12, 15, 13, // First triangle (back-left, front-left, back-right)
+//    15, 14, 13, // Second triangle (front-left, front-right, back-right)
+//
+//    // Right face
+//    16, 17, 18, // First triangle (bottom-front, top-front, top-back)
+//    18, 19, 16, // Second triangle (top-back, bottom-back, bottom-front)
+//
+//    // Left face
+//    20, 23, 21, // First triangle (bottom-back, bottom-front, top-back)
+//    23, 22, 21  // Second triangle (bottom-front, top-front, top-back)
+//};
 
-    // Back face
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-left
-    {{ 0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}}, // Bottom-right
-    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-right
-    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}, // Top-left
-
-    // Top face
-    {{-0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-left
-    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, 1.0f,  0.0f}}, // Front-right
-    {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-right
-    {{-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 1.0f,  0.0f}}, // Back-left
-
-    // Bottom face
-    {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-left
-    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {0.0f, -1.0f,  0.0f}}, // Back-right
-    {{ 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-right
-    {{-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, -1.0f,  0.0f}}, // Front-left
-
-    // Right face
-    {{ 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-front
-    {{ 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f,  0.0f,  0.0f}}, // Top-front
-    {{ 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Top-back
-    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {1.0f,  0.0f,  0.0f}}, // Bottom-back
-
-    // Left face
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Bottom-back
-    {{-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-back
-    {{-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}, // Top-front
-    {{-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // Bottom-front
-};
-
-const std::vector<uint16_t> cube_indices = {
-    // Front face
-    0, 1, 2,    // First triangle (bottom-left to top-right)
-    2, 3, 0,    // Second triangle (top-right to top-left)
-
-    // Back face
-    5, 4, 7,
-    7, 6, 5,
-
-    // Top face
-    8, 9, 10,
-    10, 11, 8,
-
-    // Bottom face
-    12, 13, 14,
-    14, 15, 12,
-
-    // Right face
-    17, 16, 19,
-    19, 18, 17,
-
-    // Left face
-    20, 21, 22,
-    22, 23, 20
-};
-
-void create_cube_mesh(Mesh& mesh) {
-	mesh.mesh_type = MeshType::CUBE;
-	mesh.vertices = cube_vertices;
-	mesh.indices = cube_indices;
-}
+//void create_cube_mesh(Mesh& mesh) {
+//	mesh.mesh_type = MeshType::CUBE;
+//	mesh.vertices = cube_vertices;
+//	mesh.indices = cube_indices;
+//}
 
 VkResult cleanup_mesh(Init &init, Mesh& mesh)
 {

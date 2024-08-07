@@ -42,5 +42,5 @@ void main() {
     gl_Position = clipPos.xyww;
 
     outTexCoords = pos;
-    outTexCoords = vec3(pos.x, -pos.y, pos.z);
+    outTexCoords = vec3(pos.x, pos.y, pos.z);
 }
