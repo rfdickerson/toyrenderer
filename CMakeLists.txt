@@ -1,13 +1,18 @@
 cmake_minimum_required(VERSION 3.28)
 project(toyrenderer)
 
-add_subdirectory(extern/vk-bootstrap)
-add_subdirectory(extern/VulkanMemoryAllocator)
+#add_subdirectory(extern/vk-bootstrap)
+#add_subdirectory(extern/VulkanMemoryAllocator)
+#add_subdirectory(extern/KTX-Software)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(glfw3 3.3 REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(Ktx CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+find_package(vk-bootstrap CONFIG REQUIRED)
 
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -41,7 +46,21 @@ file(GLOB_RECURSE SRC_FILES
         "${IMGUI_DIR}/*.h"
 )
 
-add_executable(toyrenderer ${SRC_FILES})
+add_executable(toyrenderer ${SRC_FILES}
+        src/image_loader.cpp
+        src/image_loader.hpp
+        src/descriptors_manager.cpp
+        src/descriptors_manager.hpp
+        src/cube_map.cpp
+        src/cube_map.hpp
+        src/mesh.cpp
+        src/mesh.hpp
+        src/water_pass.cpp
+        src/water_pass.hpp
+        src/debug_utils.cpp
+        src/debug_utils.hpp
+        src/shadow.cpp
+        src/shadow.hpp)
 
 # Compile shaders
 file(GLOB_RECURSE SHADERS
@@ -65,8 +84,11 @@ target_link_libraries(toyrenderer
         PRIVATE
         glfw
         vk-bootstrap::vk-bootstrap
+        vk-bootstrap::vk-bootstrap-compiler-warnings
         Vulkan::Vulkan
         GPUOpen::VulkanMemoryAllocator
+        KTX::ktx
+        imgui::imgui
 )
 
 # Update the path for the precompiled header
