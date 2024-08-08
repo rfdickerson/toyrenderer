@@ -13,5 +13,6 @@ layout (binding = 0) uniform UniformBufferObject {
 
 
 void main() {
-    gl_Position = ubo.lightSpaceMatrix * ubo.model * vec4(inPosition, 1.0);
+    gl_Position = ubo.lightSpaceMatrix * vec4(inPosition, 1.0);
+
 }

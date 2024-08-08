@@ -80,7 +80,7 @@ void create_sampler(Init &init, AllocatedImage &allocated_image)
 	sampler_info.unnormalizedCoordinates = VK_FALSE;
 	sampler_info.compareEnable           = VK_TRUE;
 	sampler_info.compareOp               = VK_COMPARE_OP_LESS;
-	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	sampler_info.mipLodBias              = 0.0f;
 	sampler_info.minLod                  = 0.0f;
 	sampler_info.maxLod                  = 0.0f;
@@ -173,7 +173,7 @@ glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
                                        const glm::vec3 &scene_center,
                                        float            scene_radius)
 {
-	glm::vec3 light_position = scene_center - light_direction * scene_radius;
+	glm::vec3 light_position = scene_center - light_direction * (scene_radius * 2.0f);
 
 	glm::mat4 light_view = glm::lookAt(
 	    light_position,        // light position
@@ -181,14 +181,13 @@ glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
 	    glm::vec3(0.0f, 1.0f, 0.0f));                         // up vector
 
 	// create orthographic projection matrix
-	float near_plane = -20.0f;
-	float far_plane = 20.0f;
-
+	float near_plane = 0.1f;
+	float far_plane = scene_radius * 2.0f;
 
 	glm::mat4 light_projection = glm::ortho(
 	    -scene_radius, scene_radius,
 	    -scene_radius, scene_radius,
-	    near_plane, far_plane
+	    -10.0f, 20.0f
 	    );
 
 	return light_projection * light_view;
@@ -200,7 +199,7 @@ void init_shadow_map(Init &init, RenderData &data) {
 	const glm::vec3 light_direction = glm::normalize(glm::vec3(-1.0f, -2.0f, -1.0f));
 	const glm::vec3 center = glm::vec3(0.0f);
 
-	float radius = 10.0f;
+	float radius = 5.0f;
 
 	data.shadow_map.light_direction = light_direction;
 	data.shadow_map.light_space_matrix = calculate_light_space_matrix(light_direction, center, radius);
@@ -292,11 +291,6 @@ VkPipeline create_shadow_pipeline(Init &init, VkPipelineLayout pipeline_layout) 
 	rasterizer.depthBiasClamp = 0.0f;
 	rasterizer.depthBiasSlopeFactor = 1.75f;
 
-//	rasterizer.depthBiasEnable = VK_FALSE;
-//	rasterizer.depthBiasConstantFactor = 1.25f;
-//	rasterizer.depthBiasClamp = 0.0f;
-//	rasterizer.depthBiasSlopeFactor = 1.75f;
-
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
@@ -306,7 +300,7 @@ VkPipeline create_shadow_pipeline(Init &init, VkPipelineLayout pipeline_layout) 
 	depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depth_stencil.depthTestEnable = VK_TRUE;
 	depth_stencil.depthWriteEnable = VK_TRUE;
-	depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
 	depth_stencil.depthBoundsTestEnable = VK_FALSE;
 	depth_stencil.stencilTestEnable = VK_FALSE;
 

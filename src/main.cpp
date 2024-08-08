@@ -187,7 +187,7 @@ VkSurfaceKHR create_surface_glfw(VkInstance instance, GLFWwindow* window, VkAllo
 }
 
 int device_initialization(Init& init) {
-    init.window = create_window_glfw("Vulkan Triangle", true);
+    init.window = create_window_glfw("Obsidian", true);
 
     vkb::InstanceBuilder instance_builder;
 
@@ -1208,7 +1208,6 @@ int create_new_imgui_frame(Init& init, RenderData& render_data) {
 	ImGui::NewFrame();
 
 	ImGui::Begin("Obsidian Engine");
-	ImGui::Text("This is some useful text.");
 	// show camera coordinates
 	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
 

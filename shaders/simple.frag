@@ -10,7 +10,7 @@ layout(binding = 0) uniform UniformBufferObject {
 
 layout(binding = 1) uniform sampler2D texSampler;
 layout(binding = 2) uniform sampler2D cubeMap;
-layout(binding = 3) uniform sampler2D shadowMap;
+layout(binding = 3) uniform sampler2DShadow shadowMap;
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
@@ -26,14 +26,15 @@ float ShadowCalculation(vec4 fragPosLightSpace)
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
 
     // Transform to [0,1] range
-    projCoords.xy = projCoords.xy * 0.5 + 0.5;
+     projCoords.xy = projCoords.xy * 0.5 + 0.5;
+   // projCoords = projCoords * 0.5 + 0.5;
 
     // Check if projection is outside the shadow map
-    if(projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
-        return 0.0;
+//    if(projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+//        return 0.0;
 
     // Get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
+    float closestDepth = texture(shadowMap, projCoords.xyz);
 
     // Get depth of current fragment from light's perspective
     float currentDepth = projCoords.z;
