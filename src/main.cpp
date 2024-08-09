@@ -428,6 +428,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_assembly.primitiveRestartEnable = VK_FALSE;
 
+
     VkViewport viewport = {};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -478,11 +479,17 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
+	VkPushConstantRange pushConstantRange = {};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(float);
+
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipeline_layout_info.setLayoutCount = 1;
     pipeline_layout_info.pSetLayouts = &data.descriptor_set_layout;
-    pipeline_layout_info.pushConstantRangeCount = 0;
+    pipeline_layout_info.pushConstantRangeCount = 1;
+	pipeline_layout_info.pPushConstantRanges = &pushConstantRange;
 
     if (init.disp.createPipelineLayout(&pipeline_layout_info, nullptr, &data.pipeline_layout) != VK_SUCCESS) {
         std::cout << "failed to create pipeline layout\n";
@@ -793,7 +800,12 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	// bind descriptor sets
 	init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
 
+	float scale = 2.0f;
+	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(float), &scale);
 	data.mesh->draw(init, data.command_buffers[imageIndex]);
+
+	scale = 20.0f;
+	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(float), &scale);
 	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
 	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
 	end_debug_label(init, data.command_buffers[imageIndex]);
@@ -871,7 +883,9 @@ int draw_frame(Init& init, RenderData& data) {
     }
     data.image_in_flight[image_index] = data.in_flight_fences[data.current_frame];
 
+	// update state
 	update_uniform_buffer(image_index, init, data);
+	update_shadow(init, data);
 
     // Record the command buffer for this frame
     if (record_command_buffer(init, data, image_index) != 0) {
@@ -1208,6 +1222,17 @@ int create_new_imgui_frame(Init& init, RenderData& render_data) {
 	ImGui::NewFrame();
 
 	ImGui::Begin("Obsidian Engine");
+
+	// show light direction and change it
+	ImGui::SliderFloat3("Light Direction", &render_data.shadow_map.light_direction.x, -1.0f, 1.0f);
+
+	ImGui::SliderFloat("Light Distance", &render_data.shadow_map.light_distance, 10.0f, 100.0f);
+	ImGui::SliderFloat("Light Volume", &render_data.shadow_map.radius, 1.0f, 100.0f);
+	ImGui::SliderFloat("Light Near Plane", &render_data.shadow_map.near_plane, 0.1f, 50.0f);
+	ImGui::SliderFloat("Light Far Plane", &render_data.shadow_map.far_plane, 5.0f, 100.0f);
+	ImGui::SliderFloat("Depth Bias Constant", &render_data.shadow_map.bias, 0.0f, 2.0f);
+	ImGui::SliderFloat("Depth Bias Slope", &render_data.shadow_map.slope_bias, 0.0f, 2.0f);
+
 	// show camera coordinates
 	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
 
@@ -1225,8 +1250,8 @@ int create_new_imgui_frame(Init& init, RenderData& render_data) {
 
 void configure_mouse_input(const Init& init, RenderData& render_data) {
 	glfwSetWindowUserPointer(init.window, &render_data);
-	glfwSetCursorPosCallback(init.window, mouse_callback);
-	glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	//glfwSetCursorPosCallback(init.window, mouse_callback);
+	//glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 int main() {
@@ -1272,6 +1297,9 @@ int main() {
 	const auto cmdBuffer = begin_single_time_commands(init);
 	transition_shadowmap_initial(init, cmdBuffer, render_data.shadow_map.image);
 	end_single_time_commands(init, cmdBuffer);
+
+	render_data.camera.position = glm::vec3(-2.2f, 1.66f, 1.7f);
+	render_data.camera.look_at(glm::vec3(0.0f));
 
     while (!glfwWindowShouldClose(init.window)) {
 

@@ -79,3 +79,10 @@ void Camera::process_mouse_scroll(float yoffset) {
         fov = 45.0f;
     }
 }
+
+void Camera::look_at(glm::vec3 target)
+{
+	front = glm::normalize(target - position);
+	pitch = glm::degrees(asin(front.y));
+	yaw = glm::degrees(atan2(front.z, front.x));
+}

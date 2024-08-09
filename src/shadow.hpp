@@ -14,6 +14,8 @@ struct RenderData;
 
 void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer, uint32_t image_index);
 
+void update_shadow(Init &init, RenderData &data);
+
 // create the shadow map
 void init_shadow_map(Init &init, RenderData &data);
 void create_shadow_map(Init &init, RenderData& data, uint32_t width, uint32_t height);

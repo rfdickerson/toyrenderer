@@ -79,8 +79,8 @@ void create_sampler(Init &init, AllocatedImage &allocated_image)
 	sampler_info.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 	sampler_info.unnormalizedCoordinates = VK_FALSE;
 	sampler_info.compareEnable           = VK_TRUE;
-	sampler_info.compareOp               = VK_COMPARE_OP_LESS;
-	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	sampler_info.compareOp               = VK_COMPARE_OP_LESS_OR_EQUAL;
+	sampler_info.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 	sampler_info.mipLodBias              = 0.0f;
 	sampler_info.minLod                  = 0.0f;
 	sampler_info.maxLod                  = 0.0f;
@@ -153,6 +153,8 @@ void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer, 
 	scissor.offset = {0, 0};
 	scissor.extent = {SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT};
 
+	// set dynamic states
+	init.disp.cmdSetDepthBias(command_buffer, data.shadow_map.bias, 0.0f, data.shadow_map.slope_bias);
 	init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
 	init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
 
@@ -164,31 +166,32 @@ void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer, 
 	init.disp.cmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline_layout, 0, 1, &data.descriptor_sets[image_index], 0, nullptr);
 
 	data.mesh->draw(init, command_buffer);
-	//data.plane_mesh->draw(init, command_buffer);
+	data.plane_mesh->draw(init, command_buffer);
 
 	init.disp.cmdEndRendering(command_buffer);
 }
 
 glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
                                        const glm::vec3 &scene_center,
-                                       float            scene_radius)
+                                       float            scene_radius,
+                                       float light_distance = 25.0f,
+                                       float near_plane = 1.0f,
+                                       float far_plane = 7.5f
+                                       )
 {
-	glm::vec3 light_position = scene_center - light_direction * (scene_radius * 2.0f);
+	glm::vec3 light_position = scene_center - light_direction * light_distance;
 
 	glm::mat4 light_view = glm::lookAt(
-	    light_position,        // light position
-	    scene_center,                                         // look at the center of the scene
-	    glm::vec3(0.0f, 1.0f, 0.0f));                         // up vector
-
-	// create orthographic projection matrix
-	float near_plane = 0.1f;
-	float far_plane = scene_radius * 2.0f;
+	    light_position,
+	    scene_center,
+	    glm::vec3(0.0f, 1.0f, 0.0f)
+	);
 
 	glm::mat4 light_projection = glm::ortho(
 	    -scene_radius, scene_radius,
 	    -scene_radius, scene_radius,
-	    -10.0f, 20.0f
-	    );
+	    near_plane, far_plane
+	);
 
 	return light_projection * light_view;
 }
@@ -196,14 +199,26 @@ glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
 void init_shadow_map(Init &init, RenderData &data) {
 	create_shadow_map(init, data, SHADOW_MAP_WIDTH, SHADOW_MAP_HEIGHT);
 
-	const glm::vec3 light_direction = glm::normalize(glm::vec3(-1.0f, -2.0f, -1.0f));
+	const glm::vec3 light_direction = glm::normalize(glm::vec3(-1.0f, -1.0f, -2.2f));
 	const glm::vec3 center = glm::vec3(0.0f);
 
-	float radius = 5.0f;
-
 	data.shadow_map.light_direction = light_direction;
-	data.shadow_map.light_space_matrix = calculate_light_space_matrix(light_direction, center, radius);
 
+	update_shadow(init, data);
+
+}
+
+void update_shadow(Init &init, RenderData &data) {
+	const glm::vec3 center = glm::vec3(0.0f);
+
+	data.shadow_map.light_space_matrix = calculate_light_space_matrix(
+	    data.shadow_map.light_direction,
+	    center,
+	    data.shadow_map.radius,
+	    data.shadow_map.light_distance,
+	    data.shadow_map.near_plane,
+	    data.shadow_map.far_plane
+	    );
 }
 
 VkPipelineLayout create_shadow_pipeline_layout(Init& init, RenderData& data) {
@@ -283,13 +298,13 @@ VkPipeline create_shadow_pipeline(Init &init, VkPipelineLayout pipeline_layout) 
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_NONE;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
 	rasterizer.depthBiasEnable = VK_TRUE;
-	rasterizer.depthBiasConstantFactor = 1.25f;
+	rasterizer.depthBiasConstantFactor = 1.0f;
 	rasterizer.depthBiasClamp = 0.0f;
-	rasterizer.depthBiasSlopeFactor = 1.75f;
+	rasterizer.depthBiasSlopeFactor = 1.0f;
 
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -312,7 +327,8 @@ VkPipeline create_shadow_pipeline(Init &init, VkPipelineLayout pipeline_layout) 
 
 	std::vector<VkDynamicState> dynamic_states = {
 		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
+		VK_DYNAMIC_STATE_SCISSOR,
+	    VK_DYNAMIC_STATE_DEPTH_BIAS
 	};
 
 	VkPipelineDynamicStateCreateInfo dynamic_state = {};

@@ -32,6 +32,10 @@ class Camera
 
 	void update_camera_vectors();
 
+	void look_at(glm::vec3 target);
+
+  public:
+
 	glm::vec3 position;
 	glm::vec3 front;
 	glm::vec3 up;

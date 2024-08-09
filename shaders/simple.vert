@@ -29,5 +29,15 @@ void main ()
 	fragTexCoord = inTexCoord;
 	fragNormal = mat3(transpose(inverse(ubo.model))) * inNormal;
 	fragPosLightSpace = ubo.lightSpaceMatrix * worldPos;
+
+	mat4 biasMatrix = mat4(
+		0.5, 0.0, 0.0, 0.0,
+		0.0, 0.5, 0.0, 0.0,
+		0.0, 0.0, 1.0, 0.0,
+		0.5, 0.5, 0.0, 1.0
+	);
+
+	fragPosLightSpace = biasMatrix * fragPosLightSpace;
+
 	fragPos = worldPos.xyz;
 }

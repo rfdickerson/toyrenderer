@@ -39,6 +39,12 @@ struct ShadowMap {
 	VkSampler sampler;
 	glm::mat4 light_space_matrix;
 	glm::vec3 light_direction;
+	float light_distance = 25.0f;
+	float bias = 1.25f;
+	float slope_bias = 1.75f;
+	float radius = 10.0f;
+	float near_plane = 1.0f;
+	float far_plane = 25.0f;
 };
 
 struct RenderData
@@ -111,6 +117,8 @@ struct UniformBufferObject
 	glm::mat4 proj;
 	glm::mat4 lightSpaceMatrix;
 	glm::vec3 lightDirection;
+	float nearPlane;
+	float farPlane;
 	float padding;
 };
 
