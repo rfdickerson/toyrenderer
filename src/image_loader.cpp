@@ -32,14 +32,14 @@ ImageLoader::~ImageLoader() {
 }
 
 TextureImage ImageLoader::load_texture(const std::string ktxfile) {
-    ktxTexture* kTexture;
+    ktxTexture2* kTexture;
     KTX_error_code ktxresult;
 
     ktxVulkanTexture texture;
     VkSampler sampler;
     VkImageView view;
 
-    ktxresult = ktxTexture_CreateFromNamedFile(ktxfile.c_str(),
+    ktxresult = ktxTexture2_CreateFromNamedFile(ktxfile.c_str(),
                                                KTX_TEXTURE_CREATE_NO_FLAGS,
                                                &kTexture);
 
@@ -49,7 +49,16 @@ TextureImage ImageLoader::load_texture(const std::string ktxfile) {
         throw std::runtime_error(message.str());
     }
 
-    ktxresult = ktxTexture_VkUploadEx(kTexture,
+	if (ktxTexture2_NeedsTranscoding(kTexture)) {
+		ktxresult = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC1_RGB, 0);
+		if (KTX_SUCCESS != ktxresult) {
+			std::stringstream message;
+			message << "Transcoding of ktxTexture from file " << ktxfile << " failed: " << ktxErrorString(ktxresult);
+			throw std::runtime_error(message.str());
+		}
+	}
+
+    ktxresult = ktxTexture2_VkUploadEx(kTexture,
                                       &kvdi, &texture,
                                       VK_IMAGE_TILING_OPTIMAL,
                                       VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -111,7 +120,7 @@ TextureImage ImageLoader::load_texture(const std::string ktxfile) {
     std::cout << "  " << "Mip Levels: " << texture.levelCount << std::endl;
     std::cout << "  " << "Array Layers: " << texture.layerCount << std::endl;
 
-    ktxTexture_Destroy(kTexture);
+    //ktxTexture_Destroy(kTexture);
 
     TextureImage newTexture;
     newTexture.texture = texture;

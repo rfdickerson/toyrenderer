@@ -13,6 +13,7 @@ find_package(imgui CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
 
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -60,7 +61,9 @@ add_executable(toyrenderer ${SRC_FILES}
         src/debug_utils.cpp
         src/debug_utils.hpp
         src/shadow.cpp
-        src/shadow.hpp)
+        src/shadow.hpp
+        src/obj_loader.cpp
+        src/obj_loader.hpp)
 
 # Compile shaders
 file(GLOB_RECURSE SHADERS
@@ -89,6 +92,7 @@ target_link_libraries(toyrenderer
         GPUOpen::VulkanMemoryAllocator
         KTX::ktx
         imgui::imgui
+        assimp::assimp
 )
 
 # Update the path for the precompiled header

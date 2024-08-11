@@ -24,6 +24,7 @@ layout(location = 0) out vec4 outColor;
 
 layout(push_constant) uniform PushConstants {
     float scale;
+    bool useTexture;
 } pushConstants;
 
 
@@ -33,14 +34,21 @@ float ShadowCalculation(vec4 fragPosLightSpace)
 }
 
 void main() {
-    vec3 color = vec3(1.0, 1.0, 1.0);
 
-    float pattern = mod(floor(fragTexCoord.x * pushConstants.scale) +
-                        floor(fragTexCoord.y * pushConstants.scale), 2.0);
-    if (pattern > 0.0) {
-        color = vec3(0.2, 0.2, 0.2);
+    vec3 color;
+    if (pushConstants.useTexture) {
+        // load the diffuse map texture
+        color = texture(texSampler, fragTexCoord).rgb;
     } else {
-        color = vec3(0.8, 0.8, 0.8);
+
+        float pattern = mod(floor(fragTexCoord.x * pushConstants.scale) +
+                            floor(fragTexCoord.y * pushConstants.scale), 2.0);
+        if (pattern > 0.0) {
+            color = vec3(0.2, 0.2, 0.2);
+        } else {
+            color = vec3(0.8, 0.8, 0.8);
+        }
+
     }
 
     vec3 normal = normalize(fragNormal);
@@ -63,5 +71,6 @@ void main() {
 
     // Final color
     outColor = vec4(lighting, 1.0);
+
 
 }

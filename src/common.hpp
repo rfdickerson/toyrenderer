@@ -81,6 +81,7 @@ struct RenderData
 	CubeMap         *cube_map;
 	Mesh 		   	*mesh;
 	Mesh 		   	*plane_mesh;
+	Mesh 			*bunny_mesh;
 
 	// shadow stuff
 	ShadowMap 	   			shadow_map;

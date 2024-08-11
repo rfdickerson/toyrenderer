@@ -311,5 +311,4 @@ VkResult copy_buffer_data(Init &init,
 }
 
 
-
 }        // namespace obsidian

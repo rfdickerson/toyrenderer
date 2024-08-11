@@ -11,6 +11,7 @@
 #include "mesh.hpp"
 #include "debug_utils.hpp"
 #include "shadow.hpp"
+#include "obj_loader.hpp"
 
 using namespace obsidian;
 
@@ -18,6 +19,11 @@ const int WIDTH = 1280;
 const int HEIGHT = 720;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+struct PushConstantBuffer {
+	float scale;
+	bool useTexture;
+};
 
 
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
@@ -479,10 +485,16 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
+//	VkPushConstantRange pushConstantRange = {};
+//	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+//	pushConstantRange.offset = 0;
+//	pushConstantRange.size = sizeof(float);
+//
+
 	VkPushConstantRange pushConstantRange = {};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(float);
+	pushConstantRange.size = sizeof(PushConstantBuffer);
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -800,13 +812,21 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	// bind descriptor sets
 	init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
 
-	float scale = 2.0f;
-	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(float), &scale);
-	data.mesh->draw(init, data.command_buffers[imageIndex]);
+	PushConstantBuffer push_constant = {};
+	push_constant.scale = 2.0f;
+	push_constant.useTexture = true;
 
-	scale = 20.0f;
-	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(float), &scale);
+	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constant);
+
+	// draw the bunny
+	data.bunny_mesh->draw(init, data.command_buffers[imageIndex]);
+
+	push_constant.scale = 20.0f;
+	push_constant.useTexture = false;
+	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constant);
+
 	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
+
 	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
 	end_debug_label(init, data.command_buffers[imageIndex]);
 
@@ -1279,7 +1299,7 @@ int main() {
 	render_data.staging_buffer = create_staging_buffer(init, 65000);
 
     ImageLoader* imageLoader = new ImageLoader(init);
-    render_data.texture = imageLoader->load_texture("../textures/wall.KTX2");
+    render_data.texture = imageLoader->load_texture("../textures/oldtruck_d.ktx2");
     render_data.cube_map_texture = imageLoader->load_cubemap("../textures/clouds.ktx2");
     render_data.cube_map = new CubeMap(init, render_data);
 
@@ -1300,6 +1320,11 @@ int main() {
 
 	render_data.camera.position = glm::vec3(-2.2f, 1.66f, 1.7f);
 	render_data.camera.look_at(glm::vec3(0.0f));
+
+	// load the bunny model
+	Mesh bunny_model = create_from_obj("../meshes/truck.obj");
+	bunny_model.transfer_mesh(init);
+	render_data.bunny_mesh = &bunny_model;
 
     while (!glfwWindowShouldClose(init.window)) {
 

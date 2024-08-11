@@ -61,6 +61,7 @@ VkResult cleanup_mesh(Init &init, Mesh& mesh);
 VkResult transfer_mesh_to_gpu(Init &init, Mesh &mesh, BufferAllocation staging_buffer);
 
 
+
 }        // namespace obsidian
 
 #endif        // TOYRENDERER_MESH_HPP
