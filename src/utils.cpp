@@ -8,7 +8,7 @@ namespace obsidian
 {
 
 // Add these helper functions for command buffer operations
-VkCommandBuffer begin_single_time_commands(Init &init)
+VkCommandBuffer begin_single_time_commands(const Init& init)
 {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -28,7 +28,7 @@ VkCommandBuffer begin_single_time_commands(Init &init)
 	return commandBuffer;
 }
 
-void end_single_time_commands(Init &init, VkCommandBuffer commandBuffer)
+void end_single_time_commands(const Init& init, const VkCommandBuffer commandBuffer)
 {
 	init.disp.endCommandBuffer(commandBuffer);
 
@@ -43,37 +43,7 @@ void end_single_time_commands(Init &init, VkCommandBuffer commandBuffer)
 	init.disp.freeCommandBuffers(init.command_pool, 1, &commandBuffer);
 }
 
-void create_buffer(Init              &init,
-                   VkDeviceSize       size,
-                   VkBufferUsageFlags usage,
-                   VmaMemoryUsage     memoryUsage,
-                   BufferAllocation  &bufferAllocation)
-{
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size               = size;
-	bufferInfo.usage              = usage;
-	bufferInfo.sharingMode        = VK_SHARING_MODE_EXCLUSIVE;
 
-	VmaAllocationCreateInfo allocInfo = {};
-	allocInfo.usage                   = memoryUsage;
-
-	if (vmaCreateBuffer(init.allocator, &bufferInfo, &allocInfo,
-	                    &bufferAllocation.buffer,
-	                    &bufferAllocation.allocation,
-	                    nullptr) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to create buffer!");
-	}
-
-	bufferAllocation.size = size;
-}
-
-void cleanup_buffer(Init &init, BufferAllocation &bufferAllocation)
-{
-	vmaDestroyBuffer(init.allocator, bufferAllocation.buffer, bufferAllocation.allocation);
-	bufferAllocation.buffer = VK_NULL_HANDLE;
-}
 
 std::vector<char> read_file(const std::string &filename)
 {
@@ -95,7 +65,7 @@ std::vector<char> read_file(const std::string &filename)
 	return buffer;
 }
 
-VkShaderModule create_shader_module(Init &init, const std::vector<char> &code)
+VkShaderModule create_shader_module(const Init &init, const std::vector<char> &code)
 {
 	VkShaderModuleCreateInfo create_info = {};
 	create_info.sType                    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -111,156 +81,7 @@ VkShaderModule create_shader_module(Init &init, const std::vector<char> &code)
 	return shaderModule;
 }
 
-VkResult copy_buffer(Init &init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-{
-	VkCommandBuffer commandBuffer = begin_single_time_commands(init);
 
-	VkBufferCopy copyRegion = {};
-	copyRegion.size         = size;
-	init.disp.cmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-	end_single_time_commands(init, commandBuffer);
-
-	return VK_SUCCESS;
-}
-
-void transition_image_to_color_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image) {
-	VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-
-	init.disp.cmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-void transition_image_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
-{
-	VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = 0;
-	barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-
-    init.disp.cmdPipelineBarrier(command_buffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-void transition_shadowmap_to_shader_read(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image) {
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-	init.disp.cmdPipelineBarrier(
-	    command_buffer,
-		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-	 	VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-	 	0,
-	    0, nullptr,
-	    0, nullptr,
-	    1, &barrier);
-
-}
-
-void transition_image_to_present(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
-{
-	VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-	barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-
-	init.disp.cmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-void transition_shadowmap_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
-{
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-	init.disp.cmdPipelineBarrier(
-	    command_buffer,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-	 	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-	 	0,
-	    0, nullptr,
-	    0, nullptr,
-	    1, &barrier);
-}
-
-void transition_shadowmap_initial(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image)
-{
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = 0;
-	barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-	init.disp.cmdPipelineBarrier(
-	    command_buffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-	 	VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-	 	0,
-	    0, nullptr,
-	    0, nullptr,
-	    1, &barrier);
-}
 
 }

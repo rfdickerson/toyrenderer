@@ -8,30 +8,17 @@ namespace obsidian
 struct Init;
 struct BufferAllocation;
 
-VkCommandBuffer begin_single_time_commands(Init &init);
-void            end_single_time_commands(Init &init, VkCommandBuffer commandBuffer);
+// Single use command buffer submission
+VkCommandBuffer begin_single_time_commands(const Init& init);
 
-void create_buffer(Init              &init,
-                   VkDeviceSize       size,
-                   VkBufferUsageFlags usage,
-                   VmaMemoryUsage     memoryUsage,
-                   BufferAllocation  &bufferAllocation);
-
-void cleanup_buffer(Init &init, BufferAllocation &bufferAllocation);
+void end_single_time_commands(const Init& init, const VkCommandBuffer commandBuffer);
 
 std::vector<char> read_file(const std::string &filename);
-VkShaderModule    create_shader_module(Init &init, const std::vector<char> &code);
 
-VkResult copy_buffer(Init &init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+VkShaderModule    create_shader_module(const Init &init, const std::vector<char> &code);
 
-void transition_image_to_color_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
 
-void transition_image_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
 
-void transition_image_to_present(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
 
-void transition_shadowmap_initial(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
-void transition_shadowmap_to_shader_read(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
-void transition_shadowmap_to_depth_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);
 
 } // namespace obsidian

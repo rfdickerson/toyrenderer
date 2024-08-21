@@ -5,25 +5,25 @@ namespace obsidian
 struct Init;
 struct RenderData;
 
-class CubeMap
+struct CubeMap
 {
-  public:
-	CubeMap(Init &init, RenderData &renderData);
-	~CubeMap();
-
-	Init       &init;
-	RenderData &renderData;
-
 	VkPipeline       pipeline;
 	VkPipelineLayout pipeline_layout;
-
-	VkRenderPass render_pass;
-
-	VkResult createRenderPass();
-	VkResult createPipeline();
-	VkResult createPipelineLayout();
-
-	VkResult render(Init& init, RenderData& render_data, VkCommandBuffer command_buffer, uint32_t image_index);
+	VkDescriptorSetLayout descriptor_set_layout;
+	VkDescriptorSet       descriptor_set;
 };
+
+CubeMap create_cubemap(const Init& init, VkDescriptorSetLayout descriptor_set_layout);
+
+void cleanup_cubemap(const Init& init, CubeMap& cubemap);
+
+void render_cubemap(const Init& init,
+	const RenderData& render_data,
+	const CubeMap& cube_map,
+	VkCommandBuffer command_buffer,
+	uint32_t image_index);
+
+VkPipelineLayout create_cubemap_pipeline_layout(const Init& init, VkDescriptorSetLayout);
+VkPipeline create_cubemap_pipeline(const Init& init, VkPipelineLayout pipeline_layout);
 
 } // namespace obsidian

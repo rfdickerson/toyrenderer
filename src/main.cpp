@@ -6,12 +6,14 @@
 #include "../extern/imgui/imgui_impl_vulkan.h"
 
 #include "camera.hpp"
-#include "image_loader.hpp"
 #include "cube_map.hpp"
-#include "mesh.hpp"
 #include "debug_utils.hpp"
-#include "shadow.hpp"
+#include "image.hpp"
+#include "image_loader.hpp"
+#include "mesh.hpp"
 #include "obj_loader.hpp"
+#include "shadow.hpp"
+#include "uniforms.hpp"
 
 using namespace obsidian;
 
@@ -29,6 +31,11 @@ struct PushConstantBuffer {
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
     auto data = static_cast<RenderData *>(glfwGetWindowUserPointer(window));
 
+	// if (ImGui::GetIO().WantCaptureMouse) {
+	// 	// ImGui is using the mouse, don't process the input for your camera
+	// 	return;
+	// }
+
     if (data->firstMouse) {
         data->lastX = xpos;
         data->lastY = ypos;
@@ -40,121 +47,18 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
     data->lastX = xpos;
     data->lastY = ypos;
 
-	data->camera.process_mouse_movement(xoffset, yoffset);
+	data->camera->process_mouse_movement(xoffset, yoffset);
+
+	ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
 }
 
-
-int create_depth_resources(Init& init, RenderData& data) {
-    //VkFormat depthFormat = findDepthFormat(init);
-	const auto depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
-
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = init.swapchain.extent.width;
-    imageInfo.extent.height = init.swapchain.extent.height;
-    imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.format = depthFormat;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    if (vmaCreateImage(init.allocator, &imageInfo, &allocInfo, &data.depth_image.image, &data.depth_image.allocation, nullptr) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create depth image!");
-    }
-
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = data.depth_image.image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = depthFormat;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
-
-    if (init.disp.createImageView(&viewInfo, nullptr, &data.depth_image_view) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create depth image view!");
-    }
-
-    return 0;
-}
-
-void copy_buffer(Init& init, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = init.command_pool;
-    allocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer;
-    if (init.disp.allocateCommandBuffers(&allocInfo, &commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate command buffer");
-    }
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    if (init.disp.beginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        throw std::runtime_error("failed to begin command buffer");
-    }
-
-    VkBufferCopy copyRegion{};
-    copyRegion.size = size;
-    init.disp.cmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-    if (init.disp.endCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        throw std::runtime_error("failed to end command buffer");
-    }
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    VkFence fence;
-
-    if (init.disp.createFence(&fenceInfo, nullptr, &fence) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create fence");
-    }
-
-    if (init.disp.queueSubmit(init.graphics_queue, 1, &submitInfo, fence) != VK_SUCCESS) {
-        throw std::runtime_error("failed to submit copy command buffer");
-    }
-
-    if (init.disp.waitForFences(1, &fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
-        throw std::runtime_error("failed to wait for fence");
-    }
-
-    init.disp.destroyFence(fence, nullptr);
-
-    init.disp.freeCommandBuffers(init.command_pool, 1, &commandBuffer);
-}
-
-void copy_buffer_data(Init& init, BufferAllocation buffer, VkDeviceSize size, void* data) {
-	void *mapped_data;
-	vmaMapMemory(init.allocator, buffer.allocation, &mapped_data);
-	memcpy(mapped_data, data, size);
-	vmaUnmapMemory(init.allocator, buffer.allocation);
-}
 
 void update_uniform_buffer(uint32_t current, Init &init, RenderData& renderData) {
 
 	UniformBufferObject ubo {
 		.model = glm::mat4(1.0f),
-		.view = renderData.camera.getViewMatrix(),
-		.proj = renderData.camera.getProjectionMatrix(),
+		.view = renderData.camera->getViewMatrix(),
+		.proj = renderData.camera->getProjectionMatrix(),
 	    .lightSpaceMatrix = renderData.shadow_map.light_space_matrix,
 	    .lightDirection = renderData.shadow_map.light_direction
 	};
@@ -309,67 +213,6 @@ int create_swapchain(Init& init) {
     return 0;
 }
 
-int create_render_pass(Init& init, RenderData& data) {
-    VkAttachmentDescription color_attachment = {};
-    color_attachment.format = init.swapchain.image_format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentDescription depthAttachment = {};
-    depthAttachment.format = VK_FORMAT_D24_UNORM_S8_UINT;
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference color_attachment_ref = {};
-    color_attachment_ref.attachment = 0;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference depthAttachmentRef = {};
-    depthAttachmentRef.attachment = 1;
-    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment_ref;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef;
-
-    VkSubpassDependency dependency = {};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;;
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-    std::array<VkAttachmentDescription, 2> attachments = {color_attachment, depthAttachment};
-    VkRenderPassCreateInfo render_pass_info = {};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-    render_pass_info.pAttachments = attachments.data();
-    render_pass_info.subpassCount = 1;
-    render_pass_info.pSubpasses = &subpass;
-    render_pass_info.dependencyCount = 1;
-    render_pass_info.pDependencies = &dependency;
-
-    if (init.disp.createRenderPass(&render_pass_info, nullptr, &data.render_pass) != VK_SUCCESS) {
-        std::cout << "failed to create render pass\n";
-        return -1; // failed to create render pass!
-    }
-    return 0;
-}
-
-
 int create_graphics_pipeline(Init& init, RenderData& data) {
     auto vert_code = read_file("shaders/simple.vert.spv");
     auto frag_code = read_file("shaders/simple.frag.spv");
@@ -485,12 +328,6 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
-//	VkPushConstantRange pushConstantRange = {};
-//	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-//	pushConstantRange.offset = 0;
-//	pushConstantRange.size = sizeof(float);
-//
-
 	VkPushConstantRange pushConstantRange = {};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
@@ -559,34 +396,6 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     return 0;
 }
 
-int create_framebuffers(Init& init, RenderData& data) {
-    data.swapchain_images = init.swapchain.get_images().value();
-    data.swapchain_image_views = init.swapchain.get_image_views().value();
-
-    data.framebuffers.resize(data.swapchain_image_views.size());
-
-    for (size_t i = 0; i < data.swapchain_image_views.size(); i++) {
-        std::array<VkImageView, 2> attachments = {
-                data.swapchain_image_views[i],
-                data.depth_image_view
-        };
-
-        VkFramebufferCreateInfo framebuffer_info = {};
-        framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebuffer_info.renderPass = data.render_pass;
-        framebuffer_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebuffer_info.pAttachments = attachments.data();
-        framebuffer_info.width = init.swapchain.extent.width;
-        framebuffer_info.height = init.swapchain.extent.height;
-        framebuffer_info.layers = 1;
-
-        if (init.disp.createFramebuffer(&framebuffer_info, nullptr, &data.framebuffers[i]) != VK_SUCCESS) {
-            return -1; // failed to create framebuffer
-        }
-    }
-    return 0;
-}
-
 int create_command_pool(Init& init, RenderData& data) {
     VkCommandPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -628,50 +437,7 @@ int create_command_buffers(Init& init, RenderData& data) {
     return 0;
 }
 
-int render_cubemap(Init& init, RenderData& data, uint32_t imageIndex) {
 
-    VkCommandBuffer commandBuffer = data.command_buffers[imageIndex];
-
-    std::array<VkClearValue, 2> clearValues = {};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-
-    VkRenderPassBeginInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = data.cube_map->render_pass;
-    renderPassInfo.framebuffer = data.framebuffers[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = init.swapchain.extent;
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
-
-
-    init.disp.cmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    VkViewport viewport = {};
-    viewport.width = static_cast<float>(init.swapchain.extent.width);
-    viewport.height = static_cast<float>(init.swapchain.extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor = {};
-    scissor.extent = init.swapchain.extent;
-
-
-    init.disp.cmdSetViewport(commandBuffer, 0, 1, &viewport);
-    init.disp.cmdSetScissor(commandBuffer, 0, 1, &scissor);
-    init.disp.cmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.cube_map->pipeline);
-
-
-    init.disp.cmdBindDescriptorSets(commandBuffer,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    data.cube_map->pipeline_layout, 0, 1,
-                                    &data.descriptor_sets[imageIndex], 0, nullptr);
-
-    init.disp.cmdDraw(commandBuffer, 36, 1, 0, 0);
-    init.disp.cmdEndRenderPass(commandBuffer);
-    return 0;
-}
 
 void begin_rendering(Init& init,
                      const VkCommandBuffer command_buffer,
@@ -774,61 +540,8 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	transition_image_to_color_attachment(init, command_buffer, data.swapchain_images[imageIndex]);
 	transition_image_to_depth_attachment(init, command_buffer, data.depth_image.image);
 
-	begin_debug_label(init, data.command_buffers[imageIndex], "Cube Map Rendering", {1.0f, 0.0f, 0.0f});
-	data.cube_map->render(init, data, data.command_buffers[imageIndex], imageIndex);
-	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
-
-	// transition shadow map image
-	transition_shadowmap_to_depth_attachment(init, command_buffer, data.shadow_map.image);
-
-	// shadow map rendering
-	begin_debug_label(init, data.command_buffers[imageIndex], "Shadow Map Rendering", {0.0f, 1.0f, 0.0f});
-	draw_shadow(init, data, command_buffer, imageIndex);
-	init.disp.cmdEndDebugUtilsLabelEXT(data.command_buffers[imageIndex]);
-
-	// transition shadow map image
-	transition_shadowmap_to_shader_read(init, command_buffer, data.shadow_map.image);
-
-	begin_debug_label(init, data.command_buffers[imageIndex], "Main Rendering", {1.0f, 1.0f, 0.0f});
-	begin_rendering(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex], data.depth_image_view);
-
-	// set scissor and viewport
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = (float)init.swapchain.extent.width;
-	viewport.height = (float)init.swapchain.extent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor = {};
-	scissor.offset = {0, 0};
-	scissor.extent = init.swapchain.extent;
-
-	init.disp.cmdSetViewport(data.command_buffers[imageIndex], 0, 1, &viewport);
-	init.disp.cmdSetScissor(data.command_buffers[imageIndex], 0, 1, &scissor);
-
-	init.disp.cmdBindPipeline(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
-	// bind descriptor sets
-	init.disp.cmdBindDescriptorSets(data.command_buffers[imageIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, data.pipeline_layout, 0, 1, &data.descriptor_sets[imageIndex], 0, nullptr);
-
-	PushConstantBuffer push_constant = {};
-	push_constant.scale = 2.0f;
-	push_constant.useTexture = true;
-
-	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constant);
-
-	// draw the bunny
-	data.bunny_mesh->draw(init, data.command_buffers[imageIndex]);
-
-	push_constant.scale = 20.0f;
-	push_constant.useTexture = false;
-	vkCmdPushConstants(data.command_buffers[imageIndex], data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constant);
-
-	data.plane_mesh->draw(init, data.command_buffers[imageIndex]);
-
-	init.disp.cmdEndRendering(data.command_buffers[imageIndex]);
-	end_debug_label(init, data.command_buffers[imageIndex]);
+	// render the cube map
+	render_cubemap(init, data, data.cube_map, command_buffer, imageIndex);
 
 	render_imgui(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex]);
 
@@ -878,7 +591,6 @@ int recreate_swapchain(Init& init, RenderData& data) {
     init.swapchain.destroy_image_views(data.swapchain_image_views);
 
     if (0 != create_swapchain(init)) return -1;
-    if (0 != create_framebuffers(init, data)) return -1;
     if (0 != create_command_pool(init, data)) return -1;
     if (0 != create_command_buffers(init, data)) return -1;
     return 0;
@@ -964,8 +676,7 @@ void cleanup(Init& init, RenderData& data) {
     init.disp.deviceWaitIdle();
 
     // Clean up depth resources
-    init.disp.destroyImageView(data.depth_image_view, nullptr);
-    vmaDestroyImage(init.allocator, data.depth_image.image, data.depth_image.allocation);
+    cleanup_image(init, data.depth_image);
 
     // Keep this loop for uniform buffer cleanup
     for (size_t i = 0; i < init.swapchain.image_count; i++) {
@@ -1020,12 +731,13 @@ int create_imgui(Init& init, RenderData& data) {
 
 	VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {};
 	pipeline_rendering_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-	pipeline_rendering_create_info.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+	pipeline_rendering_create_info.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
 	pipeline_rendering_create_info.pNext = nullptr;
 	pipeline_rendering_create_info.pColorAttachmentFormats = &init.swapchain.image_format;
 	pipeline_rendering_create_info.colorAttachmentCount = 1;
 
     ImGui_ImplGlfw_InitForVulkan(init.window, true);
+
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.Instance = init.instance.instance;
     init_info.PhysicalDevice = init.physical_device.physical_device;
@@ -1041,8 +753,8 @@ int create_imgui(Init& init, RenderData& data) {
     init_info.RenderPass = nullptr;
 	init_info.UseDynamicRendering = VK_TRUE;
 	init_info.PipelineRenderingCreateInfo = pipeline_rendering_create_info;
-    ImGui_ImplVulkan_Init(&init_info);
 
+    ImGui_ImplVulkan_Init(&init_info);
     ImGui_ImplVulkan_CreateFontsTexture();
 
     return 0;
@@ -1076,20 +788,20 @@ int create_descriptor_pool(Init& init, RenderData& data) {
         std::cout << "failed to create descriptor pool\n";
         return -1; // failed to create descriptor pool
     }
-    return 0;
+    return 0; 
 }
 
 
 
-void processInput(GLFWwindow* window, float deltaTime, Camera& camera) {
+void processInput(GLFWwindow* window, float deltaTime, Camera* camera) {
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		camera.process_keyboard(FORWARD, deltaTime);
+		camera->process_keyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		camera.process_keyboard(BACKWARD, deltaTime);
+		camera->process_keyboard(BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		camera.process_keyboard(LEFT, deltaTime);
+		camera->process_keyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camera.process_keyboard(RIGHT, deltaTime);
+		camera->process_keyboard(RIGHT, deltaTime);
 }
 
 int create_descriptor_set_layout(Init& init, RenderData& renderData) {
@@ -1226,11 +938,14 @@ int  create_descriptor_sets(Init& init, RenderData& renderData) {
 int create_uniform_buffers(Init& init, RenderData& renderData) {
     renderData.uniform_buffers.resize(init.swapchain.image_count);
     for (size_t i = 0; i < init.swapchain.image_count; i++) {
-        create_buffer(init,
-                      sizeof(UniformBufferObject),
-                      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                      VMA_MEMORY_USAGE_CPU_TO_GPU,
-                      renderData.uniform_buffers[i]);
+
+    	BufferAllocation buffer = create_buffer(
+    		init,
+    		sizeof(UniformBufferObject), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    		VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    	renderData.uniform_buffers[i] = buffer;
+
     }
 
     return 0;
@@ -1254,10 +969,10 @@ int create_new_imgui_frame(Init& init, RenderData& render_data) {
 	ImGui::SliderFloat("Depth Bias Slope", &render_data.shadow_map.slope_bias, 0.0f, 2.0f);
 
 	// show camera coordinates
-	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera.position.x, render_data.camera.position.y, render_data.camera.position.z);
+	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera->position.x, render_data.camera->position.y, render_data.camera->position.z);
 
 	// show camera facing
-	ImGui::Text("Camera facing: %.2f %.2f %.2f", render_data.camera.front.x, render_data.camera.front.y, render_data.camera.front.z);
+	ImGui::Text("Camera facing: %.2f %.2f %.2f", render_data.camera->front.x, render_data.camera->front.y, render_data.camera->front.z);
 
 	ImGui::End();
 
@@ -1266,12 +981,21 @@ int create_new_imgui_frame(Init& init, RenderData& render_data) {
 		std::cout << "failed to draw frame \n";
 		return -1;
 	}
+
+	return 0;
 }
 
 void configure_mouse_input(const Init& init, RenderData& render_data) {
 	glfwSetWindowUserPointer(init.window, &render_data);
-	//glfwSetCursorPosCallback(init.window, mouse_callback);
+	glfwSetCursorPosCallback(init.window, mouse_callback);
 	//glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+}
+
+void setup_swapchain_images(Init& init, RenderData& render_data)
+{
+	render_data.swapchain_images = init.swapchain.get_images().value();
+	render_data.swapchain_image_views = init.swapchain.get_image_views().value();
+
 }
 
 int main() {
@@ -1280,11 +1004,11 @@ int main() {
 
     if (0 != device_initialization(init)) return -1;
     if (0 != create_swapchain(init)) return -1;
-    if (0 != create_render_pass(init, render_data)) return -1;
     if (0 != create_descriptor_set_layout(init, render_data)) return -1;
-    if (0 != create_depth_resources(init, render_data)) return -1;
+	setup_swapchain_images(init, render_data);
+
+	render_data.depth_image = create_depth_image(init, VK_FORMAT_D16_UNORM);
     if (0 != create_graphics_pipeline(init, render_data)) return -1;
-    if (0 != create_framebuffers(init, render_data)) return -1;
     if (0 != create_command_pool(init, render_data)) return -1;
     if (0 != create_command_buffers(init, render_data)) return -1;
     if (0 != create_sync_objects(init, render_data)) return -1;
@@ -1301,13 +1025,10 @@ int main() {
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("../textures/oldtruck_d.ktx2");
     render_data.cube_map_texture = imageLoader->load_cubemap("../textures/clouds.ktx2");
-    render_data.cube_map = new CubeMap(init, render_data);
+
+	render_data.cube_map = create_cubemap(init, render_data.descriptor_set_layout);
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
-	render_data.mesh = Mesh::create_cube();
-	render_data.mesh->transfer_mesh(init);
-	render_data.plane_mesh = Mesh::create_plane(10, 10);
-	render_data.plane_mesh->transfer_mesh(init);
 
     auto lastTime = std::chrono::high_resolution_clock::now();
     float deltaTime = 0.0f;
@@ -1318,13 +1039,12 @@ int main() {
 	transition_shadowmap_initial(init, cmdBuffer, render_data.shadow_map.image);
 	end_single_time_commands(init, cmdBuffer);
 
-	render_data.camera.position = glm::vec3(-2.2f, 1.66f, 1.7f);
-	render_data.camera.look_at(glm::vec3(0.0f));
+	render_data.camera = new Camera();
 
-	// load the bunny model
-	Mesh bunny_model = create_from_obj("../meshes/truck.obj");
-	bunny_model.transfer_mesh(init);
-	render_data.bunny_mesh = &bunny_model;
+	render_data.camera->position = glm::vec3(-2.2f, 1.66f, 1.7f);
+	render_data.camera->look_at(glm::vec3(0.0f));
+
+	MeshData truck_model = create_from_obj("../meshes/truck.obj");
 
     while (!glfwWindowShouldClose(init.window)) {
 
@@ -1346,7 +1066,7 @@ int main() {
     }
     init.disp.deviceWaitIdle();
 
-    delete render_data.cube_map;
+    cleanup_cubemap(init, render_data.cube_map);
     delete imageLoader;
 
 	cleanup_shadow_map(init, render_data);

@@ -39,31 +39,53 @@ endfunction()
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/imgui")
 
-# Collect all the source files
-file(GLOB_RECURSE SRC_FILES
-        "${SRC_DIR}/*.cpp"
-        "${SRC_DIR}/*.hpp"
-        "${IMGUI_DIR}/*.cpp"
-        "${IMGUI_DIR}/*.h"
+set(IMGUI_SRC
+        ${IMGUI_DIR}/imconfig.h
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui.h
+        ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/imgui_impl_glfw.h
+    ${IMGUI_DIR}/imgui_impl_vulkan.cpp
+    ${IMGUI_DIR}/imgui_impl_vulkan.h
+        ${IMGUI_DIR}/imgui_internal.h
+        ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+
 )
 
-add_executable(toyrenderer ${SRC_FILES}
-        src/image_loader.cpp
-        src/image_loader.hpp
-        src/descriptors_manager.cpp
-        src/descriptors_manager.hpp
-        src/cube_map.cpp
+add_executable(toyrenderer
+        ${IMGUI_SRC}
+        src/buffer.hpp
+        src/camera.hpp
+        src/camera.cpp
+        src/common.hpp
         src/cube_map.hpp
-        src/mesh.cpp
-        src/mesh.hpp
-        src/water_pass.cpp
-        src/water_pass.hpp
+        src/cube_map.cpp
         src/debug_utils.cpp
         src/debug_utils.hpp
+        src/image_loader.cpp
+        src/image_loader.hpp
+        src/cube_map.cpp
+        src/cube_map.hpp
+        src/main.cpp
+        src/mesh.cpp
+        src/mesh.hpp
+        src/obj_loader.cpp
+        src/obj_loader.hpp
         src/shadow.cpp
         src/shadow.hpp
-        src/obj_loader.cpp
-        src/obj_loader.hpp)
+        src/utils.hpp
+        src/utils.cpp
+        src/vma_impl.cpp
+        src/buffer.cpp
+        src/image.cpp
+        src/image.hpp
+        src/render.cpp
+        src/render.hpp
+        src/vertex.hpp
+        src/uniforms.hpp)
 
 # Compile shaders
 file(GLOB_RECURSE SHADERS

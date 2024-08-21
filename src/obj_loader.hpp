@@ -9,7 +9,7 @@
 
 namespace obsidian {
 
-Mesh create_from_obj(const std::string& filename);
+MeshData create_from_obj(const std::string& filename);
 
 }
 

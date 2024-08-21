@@ -165,7 +165,7 @@ void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer, 
 	// bind descriptor set
 	init.disp.cmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline_layout, 0, 1, &data.descriptor_sets[image_index], 0, nullptr);
 
-	data.bunny_mesh->draw(init, command_buffer);
+	//data.bunny_mesh.draw(init, command_buffer);
 	//data.mesh->draw(init, command_buffer);
 	//data.plane_mesh->draw(init, command_buffer);
 
