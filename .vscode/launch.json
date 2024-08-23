@@ -11,14 +11,14 @@
             "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${command:cmake.buildDirectory}",
             "environment": [
                 {
                     "name": "PATH",
                     "value": "${env:PATH}:${command:cmake.launchTargetDirectory}"
                 }
             ],
-            "console": "externalTerminal"
+            "console": "integratedTerminal"
         }
 
     ]
