@@ -33,7 +33,7 @@ struct RenderData
 
 	std::vector<VkImage>       swapchain_images;
 	std::vector<VkImageView>   swapchain_image_views;
-	std::vector<VkFramebuffer> framebuffers;
+	//std::vector<VkFramebuffer> framebuffers;
 
 	VkRenderPass     render_pass;
 	VkPipelineLayout pipeline_layout;

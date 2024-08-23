@@ -124,9 +124,9 @@ void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer comman
 
 	const BufferAllocation vertex_buffer = render_data.vertex_buffers[mesh.vertex_buffer_handle];
 	const BufferAllocation index_buffer = render_data.index_buffers[mesh.index_buffer_handle];
-	VkDescriptorSet descriptor_set = render_data.descriptor_sets[imageIndex];
+	const VkDescriptorSet descriptor_set = render_data.descriptor_sets[imageIndex];
 
-	const VkBuffer         vertex_buffers[] = {vertex_buffer.buffer};
+	const VkBuffer vertex_buffers[] = {vertex_buffer.buffer};
 	constexpr VkDeviceSize offsets[] = {0};
 
 	// bind vertex buffer
@@ -140,13 +140,9 @@ void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer comman
 		&descriptor_set,
 		0, nullptr);
 
-	// set the push constants
-	const PushConstantBuffer push_constants = {1.0f, true};
-	init.disp.cmdPushConstants(commandBuffer, render_data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constants);
-
 
 	// loop over the submeshes
-	for (auto submesh : mesh.submeshes)
+	for (TriangleSubmesh submesh : mesh.submeshes)
 	{
 		init.disp.cmdDrawIndexed(commandBuffer, submesh.index_count, 1, 0, 0, 0);
 	}
@@ -158,23 +154,6 @@ VkResult cleanup_mesh(Init &init, Mesh& mesh)
 
 	return VK_SUCCESS;
 }
-
-
-
-// VkResult copy_buffer_data(Init &init,
-//                           const VkCommandBuffer &commandBuffer,
-//                           BufferAllocation &src_buffer,
-//                           BufferAllocation &dst_buffer,
-//                           uint32_t size, uint32_t src_offset, uint32_t dst_offset)
-// {
-// 	VkBufferCopy copyRegion = {};
-// 	copyRegion.size = size;
-// 	copyRegion.srcOffset = src_offset;
-// 	copyRegion.dstOffset = dst_offset;
-// 	init.disp.cmdCopyBuffer(commandBuffer, src_buffer.buffer, dst_buffer.buffer, 1, &copyRegion);
-
-// 	return VK_SUCCESS;
-// }
 
 
 }        // namespace obsidian

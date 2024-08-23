@@ -1,5 +1,8 @@
+#pragma once
+
 namespace obsidian {
 
+// forward declarations
 struct Init;
 struct RenderData;
 

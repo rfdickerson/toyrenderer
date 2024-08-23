@@ -501,10 +501,41 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	transition_image_to_depth_attachment(init, command_buffer, data.depth_image.image);
 
 	// render the cube map
+	begin_debug_label(init, command_buffer, "cubemap", {0.0, 0.0, 1.0});
 	render_cubemap(init, data, data.cube_map, command_buffer, imageIndex);
+	end_debug_label(init, command_buffer);
+
+    transition_shadowmap_to_depth_attachment(init, command_buffer, data.shadow_map.image);
+
+    // begin shadow rendering
+	begin_debug_label(init, command_buffer, "shadow map", {0.0f, 1.0f, 0.0f});
+    draw_shadow(init, data, command_buffer, imageIndex);
+	end_debug_label(init, command_buffer);
+
+    transition_shadowmap_to_shader_read(init, command_buffer, data.shadow_map.image);
 
 	begin_rendering(init, command_buffer, data.swapchain_image_views[imageIndex], data.depth_image.imageView);
     init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
+
+    VkViewport viewport{
+	    .x        = 0.0f,
+	    .y        = 0.0f,
+	    .width    = static_cast<float>(init.swapchain.extent.width),
+	    .height   = static_cast<float>(init.swapchain.extent.height),
+	    .minDepth = 0.0f,
+	    .maxDepth = 1.0f};
+
+    VkRect2D scissor{
+	    .offset = {0, 0},
+	    .extent = init.swapchain.extent};
+
+    init.disp.cmdSetViewport(command_buffer, 0, 1, &viewport);
+	init.disp.cmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    // set the push constants
+	const PushConstantBuffer push_constants = {1.0f, true};
+	init.disp.cmdPushConstants(command_buffer, data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constants);
+
 	draw_mesh(init, data, command_buffer, data.meshes[0], imageIndex);
 
 	// end rendering
@@ -554,10 +585,6 @@ int recreate_swapchain(Init& init, RenderData& data) {
 	}
 
     init.disp.destroyCommandPool(data.command_pool, nullptr);
-
-    for (auto framebuffer : data.framebuffers) {
-        init.disp.destroyFramebuffer(framebuffer, nullptr);
-    }
 
     init.swapchain.destroy_image_views(data.swapchain_image_views);
 
@@ -721,8 +748,6 @@ int create_descriptor_pool(Init& init, RenderData& data) {
     return 0; 
 }
 
-
-
 void processInput(GLFWwindow* window, float deltaTime, Camera* camera) {
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camera->process_keyboard(FORWARD, deltaTime);
@@ -788,7 +813,7 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
     return 0;
 }
 
-int  create_descriptor_sets(Init& init, RenderData& renderData) {
+int create_descriptor_sets(Init& init, RenderData& renderData) {
     std::vector<VkDescriptorSetLayout> layouts(init.swapchain.image_count, renderData.descriptor_set_layout);
 
     VkDescriptorSetAllocateInfo alloc_info = {};

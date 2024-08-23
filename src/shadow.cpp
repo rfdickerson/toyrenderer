@@ -8,6 +8,7 @@
 #include "utils.hpp"
 #include "vk_mem_alloc.h"
 #include "mesh.hpp"
+#include "uniforms.hpp"
 
 namespace obsidian
 {
@@ -163,18 +164,20 @@ void draw_shadow(Init &init, RenderData &data, VkCommandBuffer &command_buffer, 
 	init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline);
 
 	// bind descriptor set
-	init.disp.cmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.shadow_pipeline_layout, 0, 1, &data.descriptor_sets[image_index], 0, nullptr);
+	init.disp.cmdBindDescriptorSets(
+		command_buffer, 
+		VK_PIPELINE_BIND_POINT_GRAPHICS, 
+		data.shadow_pipeline_layout, 0, 1, 
+		&data.descriptor_sets[image_index], 0, nullptr);
 
-	//data.bunny_mesh.draw(init, command_buffer);
-	//data.mesh->draw(init, command_buffer);
-	//data.plane_mesh->draw(init, command_buffer);
+	draw_mesh(init, data, command_buffer, data.meshes[0], image_index);
 
 	init.disp.cmdEndRendering(command_buffer);
 }
 
 glm::mat4 calculate_light_space_matrix(const glm::vec3 &light_direction,
                                        const glm::vec3 &scene_center,
-                                       float            scene_radius,
+                                       float scene_radius,
                                        float light_distance = 25.0f,
                                        float near_plane = 1.0f,
                                        float far_plane = 7.5f
@@ -223,12 +226,18 @@ void update_shadow(Init &init, RenderData &data) {
 }
 
 VkPipelineLayout create_shadow_pipeline_layout(Init& init, RenderData& data) {
+
+	VkPushConstantRange pushConstantRange           = {};
+	pushConstantRange.stageFlags                    = VK_SHADER_STAGE_FRAGMENT_BIT;
+	pushConstantRange.offset                        = 0;
+	pushConstantRange.size                          = sizeof(PushConstantBuffer);
+
 	VkPipelineLayoutCreateInfo pipeline_layout_info = {};
 	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipeline_layout_info.setLayoutCount = 1;
 	pipeline_layout_info.pSetLayouts = &data.descriptor_set_layout;
-	pipeline_layout_info.pushConstantRangeCount = 0;
-	pipeline_layout_info.pPushConstantRanges = nullptr;
+	pipeline_layout_info.pushConstantRangeCount = 1;
+	pipeline_layout_info.pPushConstantRanges = &pushConstantRange;
 
 	VkPipelineLayout pipeline_layout;
 	vkCreatePipelineLayout(init.device, &pipeline_layout_info, nullptr, &pipeline_layout);
