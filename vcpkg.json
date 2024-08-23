@@ -6,6 +6,7 @@
     "imgui",
     "vk-bootstrap",
     "vulkan-memory-allocator",
-    "glm"
+    "glm",
+    "spdlog"
   ]
 }

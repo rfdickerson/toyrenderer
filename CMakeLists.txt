@@ -15,6 +15,7 @@ find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -66,6 +67,8 @@ add_executable(toyrenderer
         src/cube_map.cpp
         src/debug_utils.cpp
         src/debug_utils.hpp
+        src/gui.hpp
+        src/gui.cpp
         src/image_loader.cpp
         src/image_loader.hpp
         src/cube_map.cpp
@@ -97,6 +100,10 @@ foreach(SHADER ${SHADERS})
     compile_shader(toyrenderer ${SHADER})
 endforeach()
 
+set(ASSETS_SOURCE_DIR "${CMAKE_SOURCE_DIR}/assets")
+
+file(COPY ${ASSETS_SOURCE_DIR} DESTINATION ${CMAKE_BINARY_DIR})
+
 # Copy compiled shaders to the build directory
 add_custom_command(TARGET toyrenderer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -117,6 +124,7 @@ target_link_libraries(toyrenderer
         imgui::imgui
         assimp::assimp
         glm::glm
+        spdlog::spdlog
 )
 
 #Update the path for the precompiled header

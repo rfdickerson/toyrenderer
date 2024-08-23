@@ -48,9 +48,11 @@ MeshData create_from_obj(const std::string &file_path)
 		}
 	}
 
-	// show the mesh stats
-	std::cout << "Vertices: " << vertex_count << std::endl;
-    std::cout << "Indices: " << index_count << std::endl;
+	// show the mesh stats in spdlog
+	spdlog::info("Loaded mesh from file: {}", file_path);
+	spdlog::info("Vertices: {}", vertex_count);
+	spdlog::info("Indices: {}", index_count);
+	
 
     // free the assimp resources
     importer.FreeScene();

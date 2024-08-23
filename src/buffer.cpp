@@ -65,7 +65,7 @@ BufferAllocation create_staging_buffer(const Init &init, uint32_t size)
 	VmaAllocationCreateInfo alloc_info = {
 	    .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
 	             VMA_ALLOCATION_CREATE_MAPPED_BIT,
-	    .usage = VMA_MEMORY_USAGE_AUTO,
+	    .usage = VMA_MEMORY_USAGE_CPU_ONLY,
 	};
 
 	if (vmaCreateBuffer(init.allocator, &buffer_info, &alloc_info, &staging_buffer.buffer, &staging_buffer.allocation, nullptr) != VK_SUCCESS)
@@ -99,7 +99,7 @@ void copy_buffer_data(const Init& init, BufferAllocation& buffer, VkDeviceSize o
 		throw std::runtime_error("invalid offset or size!");
 	}
 
-	memcpy(static_cast<char *>(mapped_data) + offset, data, size);
+	memcpy(static_cast<uint8_t*>(mapped_data) + offset, data, size);
 	vmaUnmapMemory(init.allocator, buffer.allocation);
 }
 

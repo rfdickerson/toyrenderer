@@ -129,8 +129,6 @@ void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer comman
 	const VkBuffer         vertex_buffers[] = {vertex_buffer.buffer};
 	constexpr VkDeviceSize offsets[] = {0};
 
-	init.disp.cmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render_data.graphics_pipeline);
-
 	// bind vertex buffer
 	init.disp.cmdBindVertexBuffers(commandBuffer, 0, 1, vertex_buffers, offsets);
 	init.disp.cmdBindIndexBuffer(commandBuffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);

@@ -1,9 +1,8 @@
 #include "common.hpp"
 #include "utils.hpp"
 
-#include "../extern/imgui/imgui.h"
-#include "../extern/imgui/imgui_impl_glfw.h"
-#include "../extern/imgui/imgui_impl_vulkan.h"
+
+#include <spdlog/spdlog.h>
 
 #include "camera.hpp"
 #include "cube_map.hpp"
@@ -14,6 +13,9 @@
 #include "obj_loader.hpp"
 #include "shadow.hpp"
 #include "uniforms.hpp"
+#include "gui.hpp"
+
+#include "../extern/imgui/imgui_impl_glfw.h"
 
 using namespace obsidian;
 
@@ -21,8 +23,6 @@ const int WIDTH = 1280;
 const int HEIGHT = 720;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
-
-
 
 
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
@@ -479,43 +479,7 @@ void begin_rendering(Init& init,
 	init.disp.cmdBeginRendering(command_buffer, &rendering_info);
 }
 
-void render_imgui(Init& init, const VkCommandBuffer& command_buffer, const VkImageView& image_view) {
 
-	std::array<VkRenderingAttachmentInfo, 1> colorAttachments = {{
-    {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .pNext = nullptr,
-        .imageView = image_view,
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-	    .resolveMode = VK_RESOLVE_MODE_NONE,
-	    .resolveImageView = nullptr,
-	    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {}, // Add this line if needed, or set to your desired clear value
-    }
-	}};
-
-	const VkRenderingInfo renderingInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-	    .renderArea = {0, 0, init.swapchain.extent.width, init.swapchain.extent.height},
-	    .layerCount = 1,
-	    .viewMask = 0,
-	    .colorAttachmentCount = colorAttachments.size(),
-		.pColorAttachments = colorAttachments.data(),
-		.pDepthAttachment = nullptr,
-		.pStencilAttachment = nullptr,
-	};
-
-	begin_debug_label(init, command_buffer, "ImGui Rendering", {0.5f, 0.76f, 0.34f});
-	init.disp.cmdBeginRendering(command_buffer, &renderingInfo);
-	ImGui::Render();
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
-	init.disp.cmdEndRendering(command_buffer);
-	end_debug_label(init, command_buffer);
-}
 
 int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
@@ -540,6 +504,7 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	render_cubemap(init, data, data.cube_map, command_buffer, imageIndex);
 
 	begin_rendering(init, command_buffer, data.swapchain_image_views[imageIndex], data.depth_image.imageView);
+    init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 	draw_mesh(init, data, command_buffer, data.meshes[0], imageIndex);
 
 	// end rendering
@@ -690,9 +655,7 @@ void cleanup(Init& init, RenderData& data) {
     }
 
     // Cleanup ImGui
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
+    destroy_imgui();
 
     init.disp.destroyDescriptorSetLayout(data.descriptor_set_layout, nullptr);
 
@@ -708,13 +671,8 @@ void cleanup(Init& init, RenderData& data) {
 
     init.disp.destroyCommandPool(data.command_pool, nullptr);
 
-    for (auto framebuffer : data.framebuffers) {
-        init.disp.destroyFramebuffer(framebuffer, nullptr);
-    }
-
     init.disp.destroyPipeline(data.graphics_pipeline, nullptr);
     init.disp.destroyPipelineLayout(data.pipeline_layout, nullptr);
-    init.disp.destroyRenderPass(data.render_pass, nullptr);
 
     init.swapchain.destroy_image_views(data.swapchain_image_views);
 
@@ -730,41 +688,7 @@ void cleanup(Init& init, RenderData& data) {
     destroy_window_glfw(init.window);
 }
 
-int create_imgui(Init& init, RenderData& data) {
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
 
-	VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {};
-	pipeline_rendering_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-	pipeline_rendering_create_info.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
-	pipeline_rendering_create_info.pNext = nullptr;
-	pipeline_rendering_create_info.pColorAttachmentFormats = &init.swapchain.image_format;
-	pipeline_rendering_create_info.colorAttachmentCount = 1;
-
-    ImGui_ImplGlfw_InitForVulkan(init.window, true);
-
-    ImGui_ImplVulkan_InitInfo init_info = {};
-    init_info.Instance = init.instance.instance;
-    init_info.PhysicalDevice = init.physical_device.physical_device;
-    init_info.Device = init.device.device;
-    init_info.QueueFamily = init.device.get_queue_index(vkb::QueueType::graphics).value();
-    init_info.Queue = init.graphics_queue;
-    init_info.PipelineCache = VK_NULL_HANDLE;
-    init_info.DescriptorPool = data.descriptor_pool;
-    init_info.Allocator = nullptr;
-    init_info.MinImageCount = init.swapchain.image_count;
-    init_info.ImageCount = init.swapchain.image_count;
-    init_info.CheckVkResultFn = nullptr;
-    init_info.RenderPass = nullptr;
-	init_info.UseDynamicRendering = VK_TRUE;
-	init_info.PipelineRenderingCreateInfo = pipeline_rendering_create_info;
-
-    ImGui_ImplVulkan_Init(&init_info);
-    ImGui_ImplVulkan_CreateFontsTexture();
-
-    return 0;
-}
 
 int create_descriptor_pool(Init& init, RenderData& data) {
     VkDescriptorPoolSize pool_sizes[] =
@@ -957,39 +881,7 @@ int create_uniform_buffers(Init& init, RenderData& renderData) {
     return 0;
 }
 
-int create_new_imgui_frame(Init& init, RenderData& render_data) {
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
 
-	ImGui::Begin("Obsidian Engine");
-
-	// show light direction and change it
-	ImGui::SliderFloat3("Light Direction", &render_data.shadow_map.light_direction.x, -1.0f, 1.0f);
-
-	ImGui::SliderFloat("Light Distance", &render_data.shadow_map.light_distance, 10.0f, 100.0f);
-	ImGui::SliderFloat("Light Volume", &render_data.shadow_map.radius, 1.0f, 100.0f);
-	ImGui::SliderFloat("Light Near Plane", &render_data.shadow_map.near_plane, 0.1f, 50.0f);
-	ImGui::SliderFloat("Light Far Plane", &render_data.shadow_map.far_plane, 5.0f, 100.0f);
-	ImGui::SliderFloat("Depth Bias Constant", &render_data.shadow_map.bias, 0.0f, 2.0f);
-	ImGui::SliderFloat("Depth Bias Slope", &render_data.shadow_map.slope_bias, 0.0f, 2.0f);
-
-	// show camera coordinates
-	ImGui::Text("Camera position: %.2f %.2f %.2f", render_data.camera->position.x, render_data.camera->position.y, render_data.camera->position.z);
-
-	// show camera facing
-	ImGui::Text("Camera facing: %.2f %.2f %.2f", render_data.camera->front.x, render_data.camera->front.y, render_data.camera->front.z);
-
-	ImGui::End();
-
-	int res = draw_frame(init, render_data);
-	if (res != 0) {
-		std::cout << "failed to draw frame \n";
-		return -1;
-	}
-
-	return 0;
-}
 
 void configure_mouse_input(const Init& init, RenderData& render_data) {
 	glfwSetWindowUserPointer(init.window, &render_data);
@@ -1006,13 +898,14 @@ void setup_swapchain_images(Init& init, RenderData& render_data)
 
 void setup_scene(const Init& init, RenderData& render_data)
 {
-	// set up camera
+    spdlog::info("Setting up scene");
+	// set up camera 
 	render_data.camera = new Camera();
 	render_data.camera->position = glm::vec3(-2.2f, 1.66f, 1.7f);
 	render_data.camera->look_at(glm::vec3(0.0f));
 
 	// load the mesh
-	MeshData truck_model = create_from_obj("../meshes/truck.obj");
+	MeshData truck_model = create_from_obj("assets/meshes/truck.obj");
 
 	constexpr int vertex_buffer_index = 0;
 	constexpr int index_buffer_index = 0;
@@ -1027,7 +920,7 @@ void setup_scene(const Init& init, RenderData& render_data)
 	// create the index buffer
 	render_data.index_buffers[index_buffer_index] = create_buffer(
 		init,
-		truck_model.indices.size() * sizeof(uint32_t),
+		truck_model.indices.size() * sizeof(uint16_t),
 		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		VMA_MEMORY_USAGE_GPU_ONLY);
 
@@ -1044,24 +937,38 @@ void setup_scene(const Init& init, RenderData& render_data)
         init,
 		render_data.staging_buffer,
 		offset,
-		truck_model.indices.size() * sizeof(uint32_t),
+		truck_model.indices.size() * sizeof(uint16_t),
 		truck_model.indices.data()
     );
 
 	// move data to a staging buffer
 	VkCommandBuffer cmdBuffer = begin_single_time_commands(init);
 
-	VkBufferCopy copy_regions[2];
+	VkBufferCopy copy_region;
 
-	copy_regions[0].srcOffset = 0;
-	copy_regions[0].dstOffset = 0;
-	copy_regions[0].size = truck_model.vertices.size() * sizeof(Vertex);
+    //copy the vertex data
+	copy_region.srcOffset = 0;
+	copy_region.dstOffset = 0;
+	copy_region.size = truck_model.vertices.size() * sizeof(Vertex);
 
-	copy_regions[1].srcOffset = offset;
-	copy_regions[1].dstOffset = 0;
-	copy_regions[1].size = truck_model.indices.size() * sizeof(uint32_t);
+	init.disp.cmdCopyBuffer(
+        cmdBuffer, 
+        render_data.staging_buffer.buffer, 
+        render_data.vertex_buffers[vertex_buffer_index].buffer, 
+        1, 
+        &copy_region);
 
-	init.disp.cmdCopyBuffer(cmdBuffer, render_data.staging_buffer.buffer, render_data.vertex_buffers[vertex_buffer_index].buffer, 2, copy_regions);
+    // copy the index data
+	copy_region.srcOffset = offset;
+	copy_region.dstOffset = 0;
+	copy_region.size = truck_model.indices.size() * sizeof(uint16_t);
+
+    init.disp.cmdCopyBuffer(
+        cmdBuffer, 
+        render_data.staging_buffer.buffer, 
+        render_data.index_buffers[index_buffer_index].buffer, 
+        1, 
+        &copy_region);
 
 	end_single_time_commands(init, cmdBuffer);
 
@@ -1101,8 +1008,8 @@ int main() {
 	render_data.staging_buffer = create_staging_buffer(init, 10000000);
 
     ImageLoader* imageLoader = new ImageLoader(init);
-    render_data.texture = imageLoader->load_texture("../textures/oldtruck_d.ktx2");
-    render_data.cube_map_texture = imageLoader->load_cubemap("../textures/clouds.ktx2");
+    render_data.texture = imageLoader->load_texture("assets/textures/oldtruck_d.ktx2");
+    render_data.cube_map_texture = imageLoader->load_cubemap("assets/textures/clouds.ktx2");
 
 	render_data.cube_map = create_cubemap(init, render_data.descriptor_set_layout);
 
@@ -1135,6 +1042,11 @@ int main() {
         processInput(init.window, deltaTime, render_data.camera);
 
 		create_new_imgui_frame(init, render_data);
+        int res = draw_frame(init, render_data);
+        if (res != 0) {
+		    std::cout << "failed to draw frame \n";
+            return -1;
+	    }
 
     }
     init.disp.deviceWaitIdle();
