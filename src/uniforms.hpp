@@ -20,6 +20,12 @@ struct UniformBufferObject
 	float farPlane;
 	float padding;
 };
+
+struct PushConstantBuffer {
+	float scale;
+	bool useTexture;
+};
+
 }
 
 #endif //UNIFORMS_HPP

@@ -14,6 +14,7 @@ find_package(Ktx CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
 
 # Set the source directory
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -115,9 +116,10 @@ target_link_libraries(toyrenderer
         KTX::ktx
         imgui::imgui
         assimp::assimp
+        glm::glm
 )
 
-# Update the path for the precompiled header
+#Update the path for the precompiled header
 if(EXISTS "${SRC_DIR}/stdafx.hpp")
     target_precompile_headers(
             toyrenderer

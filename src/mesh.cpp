@@ -5,6 +5,7 @@
 #include "mesh.hpp"
 
 #include "common.hpp"
+#include "uniforms.hpp"
 #include "utils.hpp"
 
 namespace obsidian
@@ -118,22 +119,33 @@ MeshData create_plane(uint32_t subdivisions, float size)
 	};
 }
 
-void draw_mesh(Init &init, const RenderData& render_data, VkCommandBuffer commandBuffer, const Mesh& mesh)
+void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer commandBuffer, const Mesh& mesh, uint32_t imageIndex)
 {
-	if (!mesh.gpu_data_initialized)
-	{
-		return;
-	}
 
 	const BufferAllocation vertex_buffer = render_data.vertex_buffers[mesh.vertex_buffer_handle];
 	const BufferAllocation index_buffer = render_data.index_buffers[mesh.index_buffer_handle];
+	VkDescriptorSet descriptor_set = render_data.descriptor_sets[imageIndex];
 
 	const VkBuffer         vertex_buffers[] = {vertex_buffer.buffer};
 	constexpr VkDeviceSize offsets[] = {0};
 
+	init.disp.cmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render_data.graphics_pipeline);
+
 	// bind vertex buffer
 	init.disp.cmdBindVertexBuffers(commandBuffer, 0, 1, vertex_buffers, offsets);
 	init.disp.cmdBindIndexBuffer(commandBuffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+
+	init.disp.cmdBindDescriptorSets(commandBuffer,
+		VK_PIPELINE_BIND_POINT_GRAPHICS,
+		render_data.pipeline_layout,
+		0, 1,
+		&descriptor_set,
+		0, nullptr);
+
+	// set the push constants
+	const PushConstantBuffer push_constants = {1.0f, true};
+	init.disp.cmdPushConstants(commandBuffer, render_data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constants);
+
 
 	// loop over the submeshes
 	for (auto submesh : mesh.submeshes)
@@ -149,45 +161,22 @@ VkResult cleanup_mesh(Init &init, Mesh& mesh)
 	return VK_SUCCESS;
 }
 
-BufferAllocation create_staging_buffer(Init &init, uint32_t size)
-{
-	BufferAllocation staging_buffer;
 
-	VkBufferCreateInfo buffer_info = {
-	    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-	    .size = size,
-	    .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-	    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-	};
 
-	VmaAllocationCreateInfo alloc_info = {
-	    .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-	             VMA_ALLOCATION_CREATE_MAPPED_BIT,
-	    .usage = VMA_MEMORY_USAGE_AUTO,
-	};
+// VkResult copy_buffer_data(Init &init,
+//                           const VkCommandBuffer &commandBuffer,
+//                           BufferAllocation &src_buffer,
+//                           BufferAllocation &dst_buffer,
+//                           uint32_t size, uint32_t src_offset, uint32_t dst_offset)
+// {
+// 	VkBufferCopy copyRegion = {};
+// 	copyRegion.size = size;
+// 	copyRegion.srcOffset = src_offset;
+// 	copyRegion.dstOffset = dst_offset;
+// 	init.disp.cmdCopyBuffer(commandBuffer, src_buffer.buffer, dst_buffer.buffer, 1, &copyRegion);
 
-	if (vmaCreateBuffer(init.allocator, &buffer_info, &alloc_info, &staging_buffer.buffer, &staging_buffer.allocation, nullptr) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to create staging buffer!");
-	}
-
-	return staging_buffer;
-}
-
-VkResult copy_buffer_data(Init &init,
-                          const VkCommandBuffer &commandBuffer,
-                          BufferAllocation &src_buffer,
-                          BufferAllocation &dst_buffer,
-                          uint32_t size, uint32_t src_offset, uint32_t dst_offset)
-{
-	VkBufferCopy copyRegion = {};
-	copyRegion.size = size;
-	copyRegion.srcOffset = src_offset;
-	copyRegion.dstOffset = dst_offset;
-	init.disp.cmdCopyBuffer(commandBuffer, src_buffer.buffer, dst_buffer.buffer, 1, &copyRegion);
-
-	return VK_SUCCESS;
-}
+// 	return VK_SUCCESS;
+// }
 
 
 }        // namespace obsidian

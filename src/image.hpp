@@ -14,9 +14,11 @@ struct Image
 	VkImage image;
 	VkImageView imageView;
 	VmaAllocation allocation;
+	VkFormat format;
 };
 
 Image create_depth_image(const Init& init, VkFormat format);
+
 void cleanup_image(const Init& init, Image& image);
 
 void transition_image_to_color_attachment(Init &init, const VkCommandBuffer& command_buffer, const VkImage& image);

@@ -55,6 +55,8 @@ Image create_depth_image(const Init &init, const VkFormat format)
 		throw std::runtime_error("failed to create depth image view!");
 	}
 
+	img.format = format;
+
 	return img;
 }
 

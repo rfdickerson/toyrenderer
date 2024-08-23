@@ -22,10 +22,7 @@ const int HEIGHT = 720;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
-struct PushConstantBuffer {
-	float scale;
-	bool useTexture;
-};
+
 
 
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
@@ -63,7 +60,7 @@ void update_uniform_buffer(uint32_t current, Init &init, RenderData& renderData)
 	    .lightDirection = renderData.shadow_map.light_direction
 	};
 
-	copy_buffer_data(init, renderData.uniform_buffers[current], sizeof(ubo), &ubo);
+	copy_buffer_data(init, renderData.uniform_buffers[current], 0, sizeof(ubo), &ubo);
 }
 
 GLFWwindow* create_window_glfw(const char* window_name = "", bool resize = true) {
@@ -366,7 +363,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
 	renderingCreateInfo.pNext = nullptr;
 	renderingCreateInfo.colorAttachmentCount = 1;
 	renderingCreateInfo.pColorAttachmentFormats = &init.swapchain.image_format;
-	renderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+	renderingCreateInfo.depthAttachmentFormat = data.depth_image.format;
 
     VkGraphicsPipelineCreateInfo pipeline_info = {};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -387,8 +384,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
 	pipeline_info.pNext = &renderingCreateInfo;
 
     if (init.disp.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &data.graphics_pipeline) != VK_SUCCESS) {
-        std::cout << "failed to create pipline\n";
-        return -1; // failed to create graphics pipeline
+        throw std::runtime_error("failed to create pipeline");
     }
 
     init.disp.destroyShaderModule(frag_module, nullptr);
@@ -543,6 +539,12 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	// render the cube map
 	render_cubemap(init, data, data.cube_map, command_buffer, imageIndex);
 
+	begin_rendering(init, command_buffer, data.swapchain_image_views[imageIndex], data.depth_image.imageView);
+	draw_mesh(init, data, command_buffer, data.meshes[0], imageIndex);
+
+	// end rendering
+	init.disp.cmdEndRendering(command_buffer);
+
 	render_imgui(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex]);
 
 	transition_image_to_present(init, data.command_buffers[imageIndex], data.swapchain_images[imageIndex]);
@@ -580,7 +582,11 @@ int create_sync_objects(Init& init, RenderData& data) {
 }
 
 int recreate_swapchain(Init& init, RenderData& data) {
-    init.disp.deviceWaitIdle();
+    VkResult result = init.disp.deviceWaitIdle();
+	if (result != VK_SUCCESS)
+	{
+		std::cout << "failed to wait for device idle\n";
+	}
 
     init.disp.destroyCommandPool(data.command_pool, nullptr);
 
@@ -998,6 +1004,79 @@ void setup_swapchain_images(Init& init, RenderData& render_data)
 
 }
 
+void setup_scene(const Init& init, RenderData& render_data)
+{
+	// set up camera
+	render_data.camera = new Camera();
+	render_data.camera->position = glm::vec3(-2.2f, 1.66f, 1.7f);
+	render_data.camera->look_at(glm::vec3(0.0f));
+
+	// load the mesh
+	MeshData truck_model = create_from_obj("../meshes/truck.obj");
+
+	constexpr int vertex_buffer_index = 0;
+	constexpr int index_buffer_index = 0;
+
+	// create the vertex buffer
+	render_data.vertex_buffers[vertex_buffer_index] = create_buffer(
+		init,
+		truck_model.vertices.size() * sizeof(Vertex),
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	// create the index buffer
+	render_data.index_buffers[index_buffer_index] = create_buffer(
+		init,
+		truck_model.indices.size() * sizeof(uint32_t),
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	copy_buffer_data(
+        init,
+	    render_data.staging_buffer,
+	    0,
+	    truck_model.vertices.size() * sizeof(Vertex),
+	    truck_model.vertices.data()
+    );
+
+	int offset = truck_model.vertices.size() * sizeof(Vertex);
+	copy_buffer_data(
+        init,
+		render_data.staging_buffer,
+		offset,
+		truck_model.indices.size() * sizeof(uint32_t),
+		truck_model.indices.data()
+    );
+
+	// move data to a staging buffer
+	VkCommandBuffer cmdBuffer = begin_single_time_commands(init);
+
+	VkBufferCopy copy_regions[2];
+
+	copy_regions[0].srcOffset = 0;
+	copy_regions[0].dstOffset = 0;
+	copy_regions[0].size = truck_model.vertices.size() * sizeof(Vertex);
+
+	copy_regions[1].srcOffset = offset;
+	copy_regions[1].dstOffset = 0;
+	copy_regions[1].size = truck_model.indices.size() * sizeof(uint32_t);
+
+	init.disp.cmdCopyBuffer(cmdBuffer, render_data.staging_buffer.buffer, render_data.vertex_buffers[vertex_buffer_index].buffer, 2, copy_regions);
+
+	end_single_time_commands(init, cmdBuffer);
+
+	Mesh truck;
+	truck.vertex_buffer_handle = vertex_buffer_index;
+	truck.index_buffer_handle = index_buffer_index;
+    truck.descriptor_set = 0;
+	truck.submeshes.push_back(TriangleSubmesh{ 0,
+		static_cast<uint16_t>(truck_model.indices.size()) });
+
+    render_data.meshes.push_back(truck);
+
+
+}
+
 int main() {
     Init init;
     RenderData render_data;
@@ -1018,9 +1097,8 @@ int main() {
 
 	init_shadow_pipeline(init, render_data);
 	init_shadow_map(init, render_data);
-    //render_data.texture = std::make_unique<Texture>( init, "../textures/wall.KTX2");
 
-	render_data.staging_buffer = create_staging_buffer(init, 65000);
+	render_data.staging_buffer = create_staging_buffer(init, 10000000);
 
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("../textures/oldtruck_d.ktx2");
@@ -1039,12 +1117,7 @@ int main() {
 	transition_shadowmap_initial(init, cmdBuffer, render_data.shadow_map.image);
 	end_single_time_commands(init, cmdBuffer);
 
-	render_data.camera = new Camera();
-
-	render_data.camera->position = glm::vec3(-2.2f, 1.66f, 1.7f);
-	render_data.camera->look_at(glm::vec3(0.0f));
-
-	MeshData truck_model = create_from_obj("../meshes/truck.obj");
+	setup_scene(init, render_data);
 
     while (!glfwWindowShouldClose(init.window)) {
 

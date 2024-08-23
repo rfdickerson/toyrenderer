@@ -6,12 +6,11 @@
 namespace obsidian
 {
 struct Init;
-struct BufferAllocation;
 
 // Single use command buffer submission
 VkCommandBuffer begin_single_time_commands(const Init& init);
 
-void end_single_time_commands(const Init& init, const VkCommandBuffer commandBuffer);
+void end_single_time_commands(const Init& init, VkCommandBuffer commandBuffer);
 
 std::vector<char> read_file(const std::string &filename);
 
