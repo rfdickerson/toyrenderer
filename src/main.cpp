@@ -3,6 +3,8 @@
 
 
 #include <spdlog/spdlog.h>
+#include <iostream>
+#include <GLFW/glfw3.h>
 
 #include "camera.hpp"
 #include "cube_map.hpp"
@@ -536,7 +538,10 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	const PushConstantBuffer push_constants = {1.0f, true};
 	init.disp.cmdPushConstants(command_buffer, data.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBuffer), &push_constants);
 
-	draw_mesh(init, data, command_buffer, data.meshes[0], imageIndex);
+	//draw_mesh(init, data, command_buffer, data.meshes[0], imageIndex);
+    for (const auto& mesh : data.meshes) {
+        draw_mesh(init, data, command_buffer, mesh, imageIndex);
+    }
 
 	// end rendering
 	init.disp.cmdEndRendering(command_buffer);
@@ -546,7 +551,7 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 	transition_image_to_present(init, data.command_buffers[imageIndex], data.swapchain_images[imageIndex]);
 
     if (init.disp.endCommandBuffer(data.command_buffers[imageIndex]) != VK_SUCCESS) {
-        std::cout << "failed to record command buffer\n";
+        spdlog::error("failed to record command buffer");
         return -1;
     }
 
@@ -911,14 +916,81 @@ int create_uniform_buffers(Init& init, RenderData& renderData) {
 void configure_mouse_input(const Init& init, RenderData& render_data) {
 	glfwSetWindowUserPointer(init.window, &render_data);
 	glfwSetCursorPosCallback(init.window, mouse_callback);
-	//glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(init.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 void setup_swapchain_images(Init& init, RenderData& render_data)
 {
 	render_data.swapchain_images = init.swapchain.get_images().value();
 	render_data.swapchain_image_views = init.swapchain.get_image_views().value();
+}
 
+void transition_meshes_from_data(const Init& init, RenderData& render_data, const std::vector<MeshData>& mesh_data)
+{
+
+    constexpr uint64_t vertex_buffer_size  = 10000000;
+	constexpr uint64_t index_buffer_size   = 1000000;
+
+  	// create the vertex buffer
+	render_data.vertex_buffers[0] = create_buffer(
+	    init,
+	    vertex_buffer_size,
+	    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	    VMA_MEMORY_USAGE_GPU_ONLY); 
+
+	// create the index buffer
+	render_data.index_buffers[0] = create_buffer(
+	    init,
+	    index_buffer_size,
+	    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	    VMA_MEMORY_USAGE_GPU_ONLY);
+
+    uint64_t vertex_offset = 0;
+    uint64_t index_offset = 0;
+
+    VkCommandBuffer command_buffer = begin_single_time_commands(init);
+
+    for (const MeshData& mesh : mesh_data) {
+        uint64_t vertex_size = mesh.vertices.size() * sizeof(Vertex);
+        uint64_t index_size = mesh.indices.size() * sizeof(uint16_t);
+
+        // Copy vertex data
+        VkBufferCopy vertex_copy_region{};
+        vertex_copy_region.srcOffset = vertex_offset;
+        vertex_copy_region.dstOffset = vertex_offset;
+        vertex_copy_region.size = vertex_size;
+
+        init.disp.cmdCopyBuffer(command_buffer, render_data.staging_buffer.buffer, render_data.vertex_buffers[0].buffer, 1, &vertex_copy_region);
+
+        VkBufferCopy index_copy_region{};
+        index_copy_region.srcOffset = vertex_offset + vertex_size;
+        index_copy_region.dstOffset = index_offset;
+        index_copy_region.size = index_size;
+
+        init.disp.cmdCopyBuffer(
+            command_buffer, 
+            render_data.staging_buffer.buffer, 
+            render_data.index_buffers[0].buffer, 
+            1, 
+            &index_copy_region);
+
+
+        Mesh newMesh;
+        newMesh.vertex_buffer_handle = 0;
+        newMesh.index_buffer_handle = 0;
+        newMesh.submeshes.push_back(TriangleSubmesh{
+            static_cast<uint16_t>(index_offset),
+            static_cast<uint16_t>(mesh.indices.size())
+        });
+
+        render_data.meshes.push_back(newMesh);
+
+        vertex_offset += vertex_size;
+        index_offset += index_size;
+        index_offset += index_size;
+    }
+
+    end_single_time_commands(init, command_buffer);
 }
 
 void setup_scene(const Init& init, RenderData& render_data)
@@ -931,81 +1003,60 @@ void setup_scene(const Init& init, RenderData& render_data)
 
 	// load the mesh
 	MeshData truck_model = create_from_obj("assets/meshes/truck.obj");
+	MeshData plane_model = create_plane(10, 10);
 
-	constexpr int vertex_buffer_index = 0;
-	constexpr int index_buffer_index = 0;
+    std::vector<MeshData> mesh_data = {
+        truck_model, plane_model
+    };
 
-	// create the vertex buffer
-	render_data.vertex_buffers[vertex_buffer_index] = create_buffer(
-		init,
-		truck_model.vertices.size() * sizeof(Vertex),
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+    uint64_t total_vertex_size = 0;
+    uint64_t total_index_size = 0;
+    for (const auto& mesh : mesh_data) {
+        total_vertex_size += mesh.vertices.size() * sizeof(Vertex);
+        total_index_size += mesh.indices.size() * sizeof(uint16_t);
+    }
 
-	// create the index buffer
-	render_data.index_buffers[index_buffer_index] = create_buffer(
-		init,
-		truck_model.indices.size() * sizeof(uint16_t),
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+    // Create staging buffer
+    uint64_t staging_buffer_size = total_vertex_size + total_index_size;
+    render_data.staging_buffer = create_staging_buffer(init, staging_buffer_size);
 
-	copy_buffer_data(
-        init,
-	    render_data.staging_buffer,
-	    0,
-	    truck_model.vertices.size() * sizeof(Vertex),
-	    truck_model.vertices.data()
-    );
+    // Copy data to staging buffer
+    uint64_t offset = 0;
+    for (const auto& mesh : mesh_data) {
+        uint64_t vertex_size = mesh.vertices.size() * sizeof(Vertex);
+        uint64_t index_size = mesh.indices.size() * sizeof(uint16_t);
 
-	int offset = truck_model.vertices.size() * sizeof(Vertex);
-	copy_buffer_data(
-        init,
-		render_data.staging_buffer,
-		offset,
-		truck_model.indices.size() * sizeof(uint16_t),
-		truck_model.indices.data()
-    );
+        copy_buffer_data(
+            init,
+            render_data.staging_buffer,
+            offset,
+            vertex_size,
+            mesh.vertices.data());
+        offset += vertex_size;
 
-	// move data to a staging buffer
-	VkCommandBuffer cmdBuffer = begin_single_time_commands(init);
+        copy_buffer_data(
+            init,
+            render_data.staging_buffer,
+            offset,
+            index_size,
+            mesh.indices.data());
+        offset += index_size;
+    }
 
-	VkBufferCopy copy_region;
+    transition_meshes_from_data(init, render_data, mesh_data);
 
-    //copy the vertex data
-	copy_region.srcOffset = 0;
-	copy_region.dstOffset = 0;
-	copy_region.size = truck_model.vertices.size() * sizeof(Vertex);
+    // create materials
+    Material truck_material;
+    truck_material.albedo_map = render_data.texture;
 
-	init.disp.cmdCopyBuffer(
-        cmdBuffer, 
-        render_data.staging_buffer.buffer, 
-        render_data.vertex_buffers[vertex_buffer_index].buffer, 
-        1, 
-        &copy_region);
+    truck_material.roughness = 0.5f;
+    truck_material.metallic = 0.5f;
 
-    // copy the index data
-	copy_region.srcOffset = offset;
-	copy_region.dstOffset = 0;
-	copy_region.size = truck_model.indices.size() * sizeof(uint16_t);
+    render_data.materials.push_back(truck_material);
 
-    init.disp.cmdCopyBuffer(
-        cmdBuffer, 
-        render_data.staging_buffer.buffer, 
-        render_data.index_buffers[index_buffer_index].buffer, 
-        1, 
-        &copy_region);
-
-	end_single_time_commands(init, cmdBuffer);
-
-	Mesh truck;
-	truck.vertex_buffer_handle = vertex_buffer_index;
-	truck.index_buffer_handle = index_buffer_index;
-    truck.descriptor_set = 0;
-	truck.submeshes.push_back(TriangleSubmesh{ 0,
-		static_cast<uint16_t>(truck_model.indices.size()) });
-
-    render_data.meshes.push_back(truck);
-
+    // assign materials to meshes
+    render_data.meshes[0].material_index = 0;
+    render_data.meshes[1].material_index = 1;
 
 }
 

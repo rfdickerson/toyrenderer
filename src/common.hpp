@@ -7,6 +7,10 @@
 #include "mesh.hpp"
 #include "shadow.hpp"
 #include "image.hpp"
+#include "material.hpp"
+
+#include <array>
+#include <VkBootstrap.h>
 
 namespace obsidian
 {
@@ -33,7 +37,6 @@ struct RenderData
 
 	std::vector<VkImage>       swapchain_images;
 	std::vector<VkImageView>   swapchain_image_views;
-	//std::vector<VkFramebuffer> framebuffers;
 
 	VkRenderPass     render_pass;
 	VkPipelineLayout pipeline_layout;
@@ -73,6 +76,11 @@ struct RenderData
 
 	BufferAllocation staging_buffer;
 	Image depth_image;
+
+	std::vector<Material> materials;
+	std::vector<VkDescriptorSet> material_descriptor_sets;
+
+
 
 
 	float       lastX      = 400;

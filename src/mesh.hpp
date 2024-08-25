@@ -31,7 +31,7 @@ struct Mesh
   	VertexBufferHandle vertex_buffer_handle;
   	IndexBufferHandle index_buffer_handle;
 	std::vector<TriangleSubmesh> submeshes;
-	MaterialHandle descriptor_set;
+	uint32_t material_index;
 
 	bool gpu_data_initialized = false;
 
@@ -39,9 +39,13 @@ struct Mesh
 
 void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer commandBuffer, const Mesh& mesh, uint32_t imageIndex);
 
-void create_cube_mesh(Init &init, Mesh& mesh);
+MeshData create_plane(uint32_t subdivisions, float size); 
 
-void create_plane_mesh(Init &init, Mesh& mesh, uint32_t subdivisions, float size);
+MeshData create_cube();
+
+//void create_cube_mesh(Init &init, Mesh& mesh);
+//
+//void create_plane_mesh(Init &init, Mesh& mesh, uint32_t subdivisions, float size);
 
 VkResult cleanup_mesh(Init &init, Mesh& mesh);
 
