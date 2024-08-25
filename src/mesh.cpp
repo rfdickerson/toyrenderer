@@ -52,7 +52,7 @@ MeshData create_cube()
 			{{-0.5f, -0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}, {-1.0f,  0.0f,  0.0f}}  // 23. Bottom-front
 	};
 
-	const std::vector<uint16_t> cube_indices {
+	const std::vector<uint32_t> cube_indices {
 		// Front face
 		1, 2, 0,    2, 3, 0,
 		// Back face
@@ -95,7 +95,7 @@ MeshData create_plane(uint32_t subdivisions, float size)
 	}
 
 	// Generate the indices
-	std::vector<uint16_t> indices(numIndices);
+	std::vector<uint32_t> indices(numIndices);
 	for (uint32_t y = 0; y < subdivisions; y++) {
 		for (uint32_t x = 0; x < subdivisions; x++) {
 			uint16_t topLeft = y * (subdivisions + 1) + x;
@@ -131,7 +131,7 @@ void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer comman
 
 	// bind vertex buffer
 	init.disp.cmdBindVertexBuffers(commandBuffer, 0, 1, vertex_buffers, offsets);
-	init.disp.cmdBindIndexBuffer(commandBuffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+	init.disp.cmdBindIndexBuffer(commandBuffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	init.disp.cmdBindDescriptorSets(commandBuffer,
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -144,7 +144,7 @@ void draw_mesh(const Init &init, RenderData& render_data, VkCommandBuffer comman
 	// loop over the submeshes
 	for (TriangleSubmesh submesh : mesh.submeshes)
 	{
-		init.disp.cmdDrawIndexed(commandBuffer, submesh.index_count, 1, 0, 0, 0);
+		init.disp.cmdDrawIndexed(commandBuffer, submesh.index_count, 1, submesh.start_index, 0, 0);
 	}
 
 }

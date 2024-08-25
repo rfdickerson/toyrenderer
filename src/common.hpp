@@ -15,7 +15,7 @@
 namespace obsidian
 {
 
-constexpr size_t MAX_BUFFERS = 200;
+constexpr size_t MAX_BUFFERS = 10;
 
 struct Init
 {
@@ -51,14 +51,14 @@ struct RenderData
 	std::vector<VkFence>     in_flight_fences;
 	std::vector<VkFence>     image_in_flight;
 	size_t                   current_frame = 0;
-
+	 
 	std::vector<BufferAllocation> uniform_buffers;
 
 	VkDescriptorPool             descriptor_pool;
 	VkDescriptorSetLayout        descriptor_set_layout;
 	std::vector<VkDescriptorSet> descriptor_sets;
 
-	Camera* camera;
+	Camera*			camera;
 	TextureImage    texture;
 	TextureImage    cube_map_texture;
 
@@ -74,18 +74,18 @@ struct RenderData
 	VkPipelineLayout 		shadow_pipeline_layout;
 	VkPipeline 		   		shadow_pipeline;
 
-	BufferAllocation staging_buffer;
+	BufferAllocation vertex_staging_buffer;
+	BufferAllocation index_staging_buffer;
+
 	Image depth_image;
 
-	std::vector<Material> materials;
+	BufferAllocation             material_buffer;
+	std::vector<Material>		 materials;
 	std::vector<VkDescriptorSet> material_descriptor_sets;
 
-
-
-
-	float       lastX      = 400;
-	float       lastY      = 300;
-	bool        firstMouse = true;
+	double lastX      = 400;
+	double lastY      = 300;
+	bool firstMouse = true;
 };
 
 

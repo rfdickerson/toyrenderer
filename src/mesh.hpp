@@ -17,13 +17,13 @@ using MaterialHandle = uint32_t;
 struct MeshData
 {
 	std::vector<Vertex> vertices;
-	std::vector<uint16_t> indices;
+	std::vector<uint32_t> indices;
 };
 
 struct TriangleSubmesh
 {
-	uint16_t index_offset;
-	uint16_t index_count;
+	uint32_t start_index;
+	uint32_t index_count;
 };
 
 struct Mesh

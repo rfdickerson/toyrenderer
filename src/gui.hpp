@@ -12,6 +12,6 @@ void render_imgui(Init& init, const VkCommandBuffer& command_buffer, const VkIma
 
 void destroy_imgui();
 
-int create_new_imgui_frame(Init& init, RenderData& render_data);
+int create_new_imgui_frame(RenderData& render_data);
 
 }

@@ -35,9 +35,9 @@ TextureImage ImageLoader::load_texture(const std::string ktxfile) {
     ktxTexture2* kTexture;
     KTX_error_code ktxresult;
 
-    ktxVulkanTexture texture;
-    VkSampler sampler;
-    VkImageView view;
+    ktxVulkanTexture    texture;
+    VkSampler           sampler;
+    VkImageView         view;
 
     ktxresult = ktxTexture2_CreateFromNamedFile(ktxfile.c_str(),
                                                KTX_TEXTURE_CREATE_NO_FLAGS,

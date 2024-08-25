@@ -41,8 +41,8 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
         data->firstMouse = false;
     }
 
-    float xoffset = xpos - data->lastX;
-    float yoffset = data->lastY - ypos; // reversed since y-coordinates go from bottom to top
+    double xoffset = xpos - data->lastX;
+    double yoffset = data->lastY - ypos; // reversed since y-coordinates go from bottom to top
     data->lastX = xpos;
     data->lastY = ypos;
 
@@ -765,16 +765,27 @@ void processInput(GLFWwindow* window, float deltaTime, Camera* camera) {
 }
 
 int create_descriptor_set_layout(Init& init, RenderData& renderData) {
-    VkDescriptorSetLayoutBinding ubo_layout_binding = {};
-    ubo_layout_binding.binding = 0;
-    ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ubo_layout_binding.descriptorCount = 1;
-    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    ubo_layout_binding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutBinding ubo_layout_binding = {
+	    .binding            = 0,
+	    .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	    .descriptorCount    = 1,
+	    .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	    .pImmutableSamplers = nullptr,
+	};
+
+    // add the material binding
+	VkDescriptorSetLayoutBinding material_layout_binding = {
+	    .binding            = 1,
+	    .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+	    .descriptorCount    = 1,
+	    .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+	    .pImmutableSamplers = nullptr,
+	};
 
     // add the sampler binding
     VkDescriptorSetLayoutBinding sampler_layout_binding = {
-            .binding = 1,
+            .binding = 2,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -783,7 +794,7 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
 
     // add cube map sampler binding
     VkDescriptorSetLayoutBinding cubemap_sampler_layout_binding = {
-            .binding = 2,
+            .binding = 3,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -792,15 +803,16 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
 
 	// add shadow map sampler binding
 	VkDescriptorSetLayoutBinding shadowmap_sampler_layout_binding = {
-		.binding = 3,
+		.binding = 4,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	};
 
-    std::array<VkDescriptorSetLayoutBinding, 4> bindings = {
+    std::array<VkDescriptorSetLayoutBinding, 5> bindings = {
             ubo_layout_binding,
+            material_layout_binding,
             sampler_layout_binding,
             cubemap_sampler_layout_binding,
 			shadowmap_sampler_layout_binding,
@@ -868,7 +880,7 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
 
         descriptor_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_writes[1].dstSet = renderData.descriptor_sets[i];
-        descriptor_writes[1].dstBinding = 1;
+        descriptor_writes[1].dstBinding = 2;
         descriptor_writes[1].dstArrayElement = 0;
         descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptor_writes[1].descriptorCount = 1;
@@ -876,7 +888,7 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
 
         descriptor_writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_writes[2].dstSet = renderData.descriptor_sets[i];
-        descriptor_writes[2].dstBinding = 2;
+        descriptor_writes[2].dstBinding = 3;
         descriptor_writes[2].dstArrayElement = 0;
         descriptor_writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptor_writes[2].descriptorCount = 1;
@@ -884,7 +896,7 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
 
 		descriptor_writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptor_writes[3].dstSet = renderData.descriptor_sets[i];
-		descriptor_writes[3].dstBinding = 3;
+		descriptor_writes[3].dstBinding = 4;
 		descriptor_writes[3].dstArrayElement = 0;
 		descriptor_writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		descriptor_writes[3].descriptorCount = 1;
@@ -925,75 +937,141 @@ void setup_swapchain_images(Init& init, RenderData& render_data)
 	render_data.swapchain_image_views = init.swapchain.get_image_views().value();
 }
 
-void transition_meshes_from_data(const Init& init, RenderData& render_data, const std::vector<MeshData>& mesh_data)
+void create_scene_data_buffers(const Init& init, RenderData& render_data, const std::vector<MeshData>& mesh_data)
 {
 
-    constexpr uint64_t vertex_buffer_size  = 10000000;
-	constexpr uint64_t index_buffer_size   = 1000000;
+    // Create staging buffer
+	uint64_t staging_buffer_size      = 1000000;
+    spdlog::info("Creating staging buffers of size {}", staging_buffer_size);
+	render_data.vertex_staging_buffer = create_staging_buffer(init, staging_buffer_size);
+	render_data.index_staging_buffer  = create_staging_buffer(init, staging_buffer_size);
 
-  	// create the vertex buffer
+    uint32_t total_vertex_count = 0;
+    uint32_t total_index_count = 0;
+
+    for (const auto& mesh : mesh_data) {
+        total_vertex_count += mesh.vertices.size();
+        total_index_count += mesh.indices.size();
+    }
+
+    // create the vertex buffer
 	render_data.vertex_buffers[0] = create_buffer(
 	    init,
-	    vertex_buffer_size,
+	    total_vertex_count * sizeof(Vertex),
 	    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 	    VMA_MEMORY_USAGE_GPU_ONLY); 
 
 	// create the index buffer
 	render_data.index_buffers[0] = create_buffer(
 	    init,
-	    index_buffer_size,
+	    total_index_count * sizeof(uint32_t),
 	    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 	    VMA_MEMORY_USAGE_GPU_ONLY);
 
-    uint64_t vertex_offset = 0;
-    uint64_t index_offset = 0;
+	// Copy data to staging buffer
+	uint32_t vertex_offset = 0;
+	uint32_t index_offset  = 0;
+
+	for (const auto &mesh : mesh_data)
+	{
+		uint32_t vertex_size = mesh.vertices.size() * sizeof(Vertex);
+		uint32_t index_size  = mesh.indices.size() * sizeof(uint32_t);
+
+        // copy the vertex data over to the staging buffer directly
+		copy_buffer_data(
+		    init,
+		    render_data.vertex_staging_buffer,
+		    vertex_offset * sizeof(Vertex),
+		    vertex_size,
+		    mesh.vertices.data());
+
+		// increment the indices by the index offset copy indices first
+		std::vector<uint32_t> adjusted_indices = mesh.indices;
+		for (auto &index : adjusted_indices)
+		{
+			index += vertex_offset;
+		}
+
+        // copy the index data over to the staging buffer directly
+		copy_buffer_data(
+		    init,
+		    render_data.index_staging_buffer,
+		    index_offset * sizeof(uint32_t),
+		    index_size,
+		    adjusted_indices.data());
+
+		// Create the Mesh struct and add it to the vector
+		Mesh new_mesh;
+		new_mesh.vertex_buffer_handle = 0; // Assuming we're using the first vertex buffer
+		new_mesh.index_buffer_handle = 0;  // Assuming we're using the first index buffer
+		new_mesh.submeshes.push_back({
+			.start_index = index_offset,
+			.index_count = static_cast<uint32_t>(mesh.indices.size()),
+		});
+		new_mesh.material_index = 0; // Assign a unique material index
+
+		render_data.meshes.push_back(new_mesh);
+
+		// Update the index_offset for the next mesh
+		index_offset += mesh.indices.size();
+        vertex_offset += mesh.vertices.size();
+
+	}
 
     VkCommandBuffer command_buffer = begin_single_time_commands(init);
 
-    for (const MeshData& mesh : mesh_data) {
-        uint64_t vertex_size = mesh.vertices.size() * sizeof(Vertex);
-        uint64_t index_size = mesh.indices.size() * sizeof(uint16_t);
+    // Copy vertex staging buffer to vertex buffer
+    VkBufferCopy vertex_copy_region{};
+    vertex_copy_region.srcOffset = 0;
+    vertex_copy_region.dstOffset = 0;
+    vertex_copy_region.size = render_data.vertex_staging_buffer.size;
+    init.disp.cmdCopyBuffer(command_buffer, render_data.vertex_staging_buffer.buffer, render_data.vertex_buffers[0].buffer, 1, &vertex_copy_region);
 
-        // Copy vertex data
-        VkBufferCopy vertex_copy_region{};
-        vertex_copy_region.srcOffset = vertex_offset;
-        vertex_copy_region.dstOffset = vertex_offset;
-        vertex_copy_region.size = vertex_size;
+    // Copy index staging buffer to index buffer
+    VkBufferCopy index_copy_region{};
+    index_copy_region.srcOffset = 0;
+    index_copy_region.dstOffset = 0;
+    index_copy_region.size = render_data.index_staging_buffer.size;
+    init.disp.cmdCopyBuffer(command_buffer, render_data.index_staging_buffer.buffer, render_data.index_buffers[0].buffer, 1, &index_copy_region);
 
-        init.disp.cmdCopyBuffer(command_buffer, render_data.staging_buffer.buffer, render_data.vertex_buffers[0].buffer, 1, &vertex_copy_region);
+    // Add memory barriers to ensure the copy is complete before using the buffers
+    VkBufferMemoryBarrier vertex_barrier{};
+    vertex_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    vertex_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vertex_barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    vertex_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    vertex_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    vertex_barrier.buffer = render_data.vertex_buffers[0].buffer;
+    vertex_barrier.offset = 0;
+    vertex_barrier.size = VK_WHOLE_SIZE;
 
-        VkBufferCopy index_copy_region{};
-        index_copy_region.srcOffset = vertex_offset + vertex_size;
-        index_copy_region.dstOffset = index_offset;
-        index_copy_region.size = index_size;
+    VkBufferMemoryBarrier index_barrier{};
+    index_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    index_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    index_barrier.dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
+    index_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    index_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    index_barrier.buffer = render_data.index_buffers[0].buffer;
+    index_barrier.offset = 0;
+    index_barrier.size = VK_WHOLE_SIZE;
 
-        init.disp.cmdCopyBuffer(
-            command_buffer, 
-            render_data.staging_buffer.buffer, 
-            render_data.index_buffers[0].buffer, 
-            1, 
-            &index_copy_region);
+    VkBufferMemoryBarrier barriers[] = {vertex_barrier, index_barrier};
 
+    init.disp.cmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+        0,
+        0, nullptr,
+        2, barriers,
+        0, nullptr
+    );
 
-        Mesh newMesh;
-        newMesh.vertex_buffer_handle = 0;
-        newMesh.index_buffer_handle = 0;
-        newMesh.submeshes.push_back(TriangleSubmesh{
-            static_cast<uint16_t>(index_offset),
-            static_cast<uint16_t>(mesh.indices.size())
-        });
-
-        render_data.meshes.push_back(newMesh);
-
-        vertex_offset += vertex_size;
-        index_offset += index_size;
-        index_offset += index_size;
-    }
 
     end_single_time_commands(init, command_buffer);
 }
 
-void setup_scene(const Init& init, RenderData& render_data)
+void setup_scene(const Init& init, RenderData& render_data, ImageLoader* image_loader)
 {
     spdlog::info("Setting up scene");
 	// set up camera 
@@ -1009,45 +1087,12 @@ void setup_scene(const Init& init, RenderData& render_data)
         truck_model, plane_model
     };
 
-    uint64_t total_vertex_size = 0;
-    uint64_t total_index_size = 0;
-    for (const auto& mesh : mesh_data) {
-        total_vertex_size += mesh.vertices.size() * sizeof(Vertex);
-        total_index_size += mesh.indices.size() * sizeof(uint16_t);
-    }
-
-    // Create staging buffer
-    uint64_t staging_buffer_size = total_vertex_size + total_index_size;
-    render_data.staging_buffer = create_staging_buffer(init, staging_buffer_size);
-
-    // Copy data to staging buffer
-    uint64_t offset = 0;
-    for (const auto& mesh : mesh_data) {
-        uint64_t vertex_size = mesh.vertices.size() * sizeof(Vertex);
-        uint64_t index_size = mesh.indices.size() * sizeof(uint16_t);
-
-        copy_buffer_data(
-            init,
-            render_data.staging_buffer,
-            offset,
-            vertex_size,
-            mesh.vertices.data());
-        offset += vertex_size;
-
-        copy_buffer_data(
-            init,
-            render_data.staging_buffer,
-            offset,
-            index_size,
-            mesh.indices.data());
-        offset += index_size;
-    }
-
-    transition_meshes_from_data(init, render_data, mesh_data);
+    create_scene_data_buffers(init, render_data, mesh_data);
 
     // create materials
-    Material truck_material;
+	Material truck_material{};
     truck_material.albedo_map = render_data.texture;
+    truck_material.normal_map = image_loader->load_texture("assets/textures/oldtruck_d.ktx2");
 
     truck_material.roughness = 0.5f;
     truck_material.metallic = 0.5f;
@@ -1081,7 +1126,6 @@ int main() {
 	init_shadow_pipeline(init, render_data);
 	init_shadow_map(init, render_data);
 
-	render_data.staging_buffer = create_staging_buffer(init, 10000000);
 
     ImageLoader* imageLoader = new ImageLoader(init);
     render_data.texture = imageLoader->load_texture("assets/textures/oldtruck_d.ktx2");
@@ -1100,7 +1144,7 @@ int main() {
 	transition_shadowmap_initial(init, cmdBuffer, render_data.shadow_map.image);
 	end_single_time_commands(init, cmdBuffer);
 
-	setup_scene(init, render_data);
+	setup_scene(init, render_data, imageLoader);
 
     while (!glfwWindowShouldClose(init.window)) {
 
@@ -1117,7 +1161,7 @@ int main() {
 
         processInput(init.window, deltaTime, render_data.camera);
 
-		create_new_imgui_frame(init, render_data);
+		create_new_imgui_frame(render_data);
         int res = draw_frame(init, render_data);
         if (res != 0) {
 		    std::cout << "failed to draw frame \n";
@@ -1131,8 +1175,6 @@ int main() {
     delete imageLoader;
 
 	cleanup_shadow_map(init, render_data);
-
-	cleanup_buffer(init, render_data.staging_buffer);
 
     cleanup(init, render_data);
     return 0;

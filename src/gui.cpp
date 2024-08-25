@@ -81,7 +81,7 @@ void render_imgui(Init& init, const VkCommandBuffer& command_buffer, const VkIma
 	    .renderArea = {0, 0, init.swapchain.extent.width, init.swapchain.extent.height},
 	    .layerCount = 1,
 	    .viewMask = 0,
-	    .colorAttachmentCount = colorAttachments.size(),
+	    .colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size()),
 		.pColorAttachments = colorAttachments.data(),
 		.pDepthAttachment = nullptr,
 		.pStencilAttachment = nullptr,
@@ -102,7 +102,7 @@ void destroy_imgui() {
     spdlog::info("ImGui destroyed");
 }
 
-int create_new_imgui_frame(Init& init, RenderData& render_data) {
+int create_new_imgui_frame(RenderData& render_data) {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
