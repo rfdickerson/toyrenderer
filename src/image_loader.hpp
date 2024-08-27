@@ -19,7 +19,7 @@ class ImageLoader
 	explicit ImageLoader(Init &init);
 	~ImageLoader();
 
-	TextureImage load_texture(const std::string ktxfile);
+	TextureImage load_texture(const std::string ktxfile, bool isNormal=false);
 	TextureImage load_cubemap(const std::string ktxfile);
 
   private:

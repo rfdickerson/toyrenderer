@@ -242,7 +242,7 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     bindingDescription.stride = sizeof(Vertex);
     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
+    std::array<VkVertexInputAttributeDescription, 6> attributeDescriptions{};
 
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
@@ -263,6 +263,17 @@ int create_graphics_pipeline(Init& init, RenderData& data) {
     attributeDescriptions[3].location = 3;
     attributeDescriptions[3].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescriptions[3].offset = offsetof(Vertex, normal);
+
+    attributeDescriptions[4].binding = 0;
+	attributeDescriptions[4].location = 4;
+	attributeDescriptions[4].format   = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[4].offset   = offsetof(Vertex, tangent);
+
+    attributeDescriptions[5].binding = 0;
+	attributeDescriptions[5].location = 5;
+	attributeDescriptions[5].format   = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[5].offset   = offsetof(Vertex, bitangent);
+
 
     VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
     vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -516,6 +527,10 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
     transition_shadowmap_to_shader_read(init, command_buffer, data.shadow_map.image);
 
+    // begin main rendering
+	// add debug label
+
+    begin_debug_label(init, command_buffer, "main rendering", {1.0f, 0.0f, 0.0f});
 	begin_rendering(init, command_buffer, data.swapchain_image_views[imageIndex], data.depth_image.imageView);
     init.disp.cmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data.graphics_pipeline);
 
@@ -545,6 +560,7 @@ int record_command_buffer(Init& init, RenderData& data, uint32_t imageIndex) {
 
 	// end rendering
 	init.disp.cmdEndRendering(command_buffer);
+	end_debug_label(init, command_buffer);
 
 	render_imgui(init, data.command_buffers[imageIndex], data.swapchain_image_views[imageIndex]);
 
@@ -792,9 +808,17 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
             .pImmutableSamplers = nullptr,
     };
 
+    VkDescriptorSetLayoutBinding normal_sampler_layout_binding = {
+	    .binding            = 3,
+	    .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	    .descriptorCount    = 1,
+	    .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+	    .pImmutableSamplers = nullptr,
+	};
+
     // add cube map sampler binding
     VkDescriptorSetLayoutBinding cubemap_sampler_layout_binding = {
-            .binding = 3,
+            .binding = 4,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -803,17 +827,18 @@ int create_descriptor_set_layout(Init& init, RenderData& renderData) {
 
 	// add shadow map sampler binding
 	VkDescriptorSetLayoutBinding shadowmap_sampler_layout_binding = {
-		.binding = 4,
+		.binding = 5,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	};
 
-    std::array<VkDescriptorSetLayoutBinding, 5> bindings = {
+    std::array<VkDescriptorSetLayoutBinding, 6> bindings = {
             ubo_layout_binding,
             material_layout_binding,
             sampler_layout_binding,
+	        normal_sampler_layout_binding,
             cubemap_sampler_layout_binding,
 			shadowmap_sampler_layout_binding,
     };
@@ -846,16 +871,30 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
     }
 
     for (size_t i = 0; i < init.swapchain.image_count; i++) {
-        VkDescriptorBufferInfo buffer_info = {};
-        buffer_info.buffer = renderData.uniform_buffers[i].buffer;
-        buffer_info.offset = 0;
-        buffer_info.range = sizeof(UniformBufferObject);
+
+        VkDescriptorBufferInfo buffer_info = {
+		    .buffer = renderData.uniform_buffers[i].buffer,
+		    .offset = 0,
+		    .range  = sizeof(UniformBufferObject),
+		};
+
+        VkDescriptorBufferInfo material_buffer_info = {
+		    .buffer = renderData.material_buffer.buffer,
+		    .offset = 0,
+		    .range  = sizeof(MaterialBufferObject),
+		};
 
         VkDescriptorImageInfo image_info = {
             .sampler = renderData.texture.sampler,
             .imageView = renderData.texture.view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
+
+        VkDescriptorImageInfo normal_image_info = {
+		    .sampler     = renderData.materials[0].normal_map.sampler,
+		    .imageView   = renderData.materials[0].normal_map.view,
+		    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
 
         VkDescriptorImageInfo cubemap_image_info = {
             .sampler = renderData.cube_map_texture.sampler,
@@ -868,7 +907,7 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
 		    .imageView   = renderData.shadow_map.image_view,
 		    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 
-        std::array<VkWriteDescriptorSet, 4> descriptor_writes = {};
+        std::array<VkWriteDescriptorSet, 6> descriptor_writes = {};
 
         descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_writes[0].dstSet = renderData.descriptor_sets[i];
@@ -879,28 +918,44 @@ int create_descriptor_sets(Init& init, RenderData& renderData) {
         descriptor_writes[0].pBufferInfo = &buffer_info;
 
         descriptor_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_writes[1].dstSet = renderData.descriptor_sets[i];
-        descriptor_writes[1].dstBinding = 2;
-        descriptor_writes[1].dstArrayElement = 0;
-        descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptor_writes[1].descriptorCount = 1;
-        descriptor_writes[1].pImageInfo = &image_info;
+		descriptor_writes[1].dstSet = renderData.descriptor_sets[i];
+		descriptor_writes[1].dstBinding = 1;
+		descriptor_writes[1].dstArrayElement = 0;
+		descriptor_writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptor_writes[1].descriptorCount = 1;
+		descriptor_writes[1].pBufferInfo     = &material_buffer_info;
 
         descriptor_writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_writes[2].dstSet = renderData.descriptor_sets[i];
-        descriptor_writes[2].dstBinding = 3;
+        descriptor_writes[2].dstBinding = 2;
         descriptor_writes[2].dstArrayElement = 0;
         descriptor_writes[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptor_writes[2].descriptorCount = 1;
-        descriptor_writes[2].pImageInfo = &cubemap_image_info;
+        descriptor_writes[2].pImageInfo = &image_info;
 
-		descriptor_writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptor_writes[3].dstSet = renderData.descriptor_sets[i];
-		descriptor_writes[3].dstBinding = 4;
+		descriptor_writes[3].dstBinding = 3;
 		descriptor_writes[3].dstArrayElement = 0;
-		descriptor_writes[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptor_writes[3].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		descriptor_writes[3].descriptorCount = 1;
-		descriptor_writes[3].pImageInfo = &shadowmap_image_info;
+		descriptor_writes[3].pImageInfo      = &normal_image_info;
+
+        descriptor_writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_writes[4].dstSet = renderData.descriptor_sets[i];
+        descriptor_writes[4].dstBinding = 4;
+        descriptor_writes[4].dstArrayElement = 0;
+        descriptor_writes[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptor_writes[4].descriptorCount = 1;
+        descriptor_writes[4].pImageInfo = &cubemap_image_info;
+
+		descriptor_writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptor_writes[5].dstSet = renderData.descriptor_sets[i];
+		descriptor_writes[5].dstBinding = 5;
+		descriptor_writes[5].dstArrayElement = 0;
+		descriptor_writes[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptor_writes[5].descriptorCount = 1;
+		descriptor_writes[5].pImageInfo = &shadowmap_image_info;
 
         init.disp.updateDescriptorSets(descriptor_writes.size(), descriptor_writes.data(), 0, nullptr);
     }
@@ -1071,6 +1126,18 @@ void create_scene_data_buffers(const Init& init, RenderData& render_data, const 
     end_single_time_commands(init, command_buffer);
 }
 
+void setup_materials(const Init& init, RenderData& render_data)
+{
+	// Create the material buffer
+	render_data.material_buffer = create_buffer(
+	    init,
+	    sizeof(MaterialBufferObject) * render_data.materials.size(),
+	    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	    VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    
+}
+
 void setup_scene(const Init& init, RenderData& render_data, ImageLoader* image_loader)
 {
     spdlog::info("Setting up scene");
@@ -1080,7 +1147,7 @@ void setup_scene(const Init& init, RenderData& render_data, ImageLoader* image_l
 	render_data.camera->look_at(glm::vec3(0.0f));
 
 	// load the mesh
-	MeshData truck_model = create_from_obj("assets/meshes/truck.obj");
+	MeshData truck_model = create_from_obj("assets/meshes/cube.obj");
 	MeshData plane_model = create_plane(10, 10);
 
     std::vector<MeshData> mesh_data = {
@@ -1092,7 +1159,7 @@ void setup_scene(const Init& init, RenderData& render_data, ImageLoader* image_l
     // create materials
 	Material truck_material{};
     truck_material.albedo_map = render_data.texture;
-    truck_material.normal_map = image_loader->load_texture("assets/textures/oldtruck_d.ktx2");
+    truck_material.normal_map = image_loader->load_texture("assets/textures/cobblestone_n.ktx2", true);
 
     truck_material.roughness = 0.5f;
     truck_material.metallic = 0.5f;
@@ -1102,6 +1169,8 @@ void setup_scene(const Init& init, RenderData& render_data, ImageLoader* image_l
     // assign materials to meshes
     render_data.meshes[0].material_index = 0;
     render_data.meshes[1].material_index = 1;
+
+    setup_materials(init, render_data);
 
 }
 
@@ -1128,10 +1197,12 @@ int main() {
 
 
     ImageLoader* imageLoader = new ImageLoader(init);
-    render_data.texture = imageLoader->load_texture("assets/textures/oldtruck_d.ktx2");
+    render_data.texture = imageLoader->load_texture("assets/textures/cobblestone_d.ktx2");
     render_data.cube_map_texture = imageLoader->load_cubemap("assets/textures/clouds.ktx2");
 
 	render_data.cube_map = create_cubemap(init, render_data.descriptor_set_layout);
+
+    setup_scene(init, render_data, imageLoader);
 
     if (0 != create_descriptor_sets(init, render_data)) return -1;
 
@@ -1143,8 +1214,6 @@ int main() {
 	const auto cmdBuffer = begin_single_time_commands(init);
 	transition_shadowmap_initial(init, cmdBuffer, render_data.shadow_map.image);
 	end_single_time_commands(init, cmdBuffer);
-
-	setup_scene(init, render_data, imageLoader);
 
     while (!glfwWindowShouldClose(init.window)) {
 

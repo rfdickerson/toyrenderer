@@ -15,4 +15,10 @@ struct Material {
     float metallic;
 };
 
+struct MaterialBufferObject
+{
+	float roughness;
+	float metallic;
+};
+
 }

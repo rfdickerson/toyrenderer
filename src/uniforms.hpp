@@ -16,8 +16,6 @@ struct UniformBufferObject
 	glm::mat4 proj;
 	glm::mat4 lightSpaceMatrix;
 	glm::vec3 lightDirection;
-	float nearPlane;
-	float farPlane;
 	float padding;
 };
 

@@ -31,7 +31,7 @@ ImageLoader::~ImageLoader() {
     ktxVulkanDeviceInfo_Destruct(&kvdi);
 }
 
-TextureImage ImageLoader::load_texture(const std::string ktxfile) {
+TextureImage ImageLoader::load_texture(const std::string ktxfile, bool isNormalMap) {
     ktxTexture2* kTexture;
     KTX_error_code ktxresult;
 
@@ -50,7 +50,8 @@ TextureImage ImageLoader::load_texture(const std::string ktxfile) {
     }
 
 	if (ktxTexture2_NeedsTranscoding(kTexture)) {
-		ktxresult = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC1_RGB, 0);
+        ktx_transcode_fmt_e format = isNormalMap ? KTX_TTF_BC5_RG : KTX_TTF_BC1_RGB;
+		ktxresult = ktxTexture2_TranscodeBasis(kTexture, format, 0);
 		if (KTX_SUCCESS != ktxresult) {
 			std::stringstream message;
 			message << "Transcoding of ktxTexture from file " << ktxfile << " failed: " << ktxErrorString(ktxresult);
